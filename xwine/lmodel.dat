@@ -1,0 +1,54 @@
+wind     1  0.  1.e20  C_wind     con  0
+vout    c       0.1     0.0     0.0     0.99    0.99    0.01
+
+zwind    2  0.  1.e20  C_zwind    con  0
+vout    c       0.1     0.0     0.0     0.99    0.99    0.01
+z       ""      0.0     0.0     0.0     10.0    10.0    0.01
+
+awind    1  0.  1.e20  C_awind    con  0
+vout    c       0.1     0.0     0.0     0.99    0.99    0.01
+
+azwind   2  0.  1.e20  C_azwind   con  0
+vout    c       0.1     0.0     0.0     0.99    0.99    0.01
+z       ""      0.0     0.0     0.0     10.0    10.0    0.01
+
+windem    4    0.0    1.e20    C_windem    con    0
+vout    c       0.1        0.0    0.0    0.99    0.99    0.01
+incl    deg     45.0       0.0    0.0    90.0    90.0    0.01
+tout    deg     90.0       0.0    0.0    90.0    90.0    -0.01
+tin     deg     0.0        0.0    0.0    90.0    90.0    -0.01
+
+windemlos  4    0.0    1.e20    C_windemlos    con    0
+vout    c       0.1        0.0    0.0    0.99    0.99    0.01
+uincl   ""      0.5        0.0    0.0    1.0     1.0     0.01
+tout    deg     90.0       0.0    0.0    90.0    90.0    -0.01
+tin     deg     0.0        0.0    0.0    90.0    90.0    -0.01
+
+windemoff  5    0.0    1.e20    C_windemoff    con    0
+vout    c       0.1        0.0    0.0    0.99    0.99    0.01
+uview   ""      0.5        0.0    0.0    1.0     1.0     0.01
+tout    deg     60.0       0.0    0.0    90.0    90.0    -0.01
+tin     deg     30.0       0.0    0.0    90.0    90.0    -0.01
+$region         0
+
+windline  5  0.0  1.e20  C_windline  add  0
+vout    c       0.1        0.0    0.0    0.99    0.99    0.01
+incl    deg     45.0       0.0    0.0    90.0    90.0    0.01
+tout    deg     90.0       0.0    0.0    90.0    90.0    -0.01
+tin     deg     0.0        0.0    0.0    90.0    90.0    -0.01
+LineE   keV     6.5        0.05   0.0    0.0     1e+06  1e+06  0.01
+
+windlinelos  5  0.0  1.e20  C_windlinelos  add  0
+vout    c       0.1        0.0    0.0    0.99    0.99    0.01
+uincl   ""      0.5        0.0    0.0    1.0     1.0     0.01
+tout    deg     90.0       0.0    0.0    90.0    90.0    -0.01
+tin     deg     0.0        0.0    0.0    90.0    90.0    -0.01
+LineE   keV     6.5        0.05   0.0    0.0     1e+06  1e+06  0.01
+
+windlineoff  6  0.0  1.e20  C_windlineoff  add  0
+vout    c       0.1        0.0    0.0    0.99    0.99    0.01
+uview   ""      0.5        0.0    0.0    1.0     1.0     0.01
+tout    deg     60.0       0.0    0.0    90.0    90.0    -0.01
+tin     deg     30.0       0.0    0.0    90.0    90.0    -0.01
+$region         0
+LineE   keV     6.5        0.05   0.0    0.0     1e+06  1e+06  0.01

@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wine"
+version = "2.0.0a0"
+description = "Relativistic wind profiles and engine-independent X-ray spectral models."
+readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.23", "scipy>=1.10"]
+
+[project.optional-dependencies]
+fits = ["astropy>=5"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
