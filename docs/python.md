@@ -41,7 +41,7 @@ grid = SpectralGrid.from_tables(
 
 These file names are placeholders; no production tables ship with WINE. Optical-depth tables may be exponential tables containing optical depth or multiplicative tables containing transmission. Emission tables must be additive and contain bin-integrated photons. All supplied tables must have identical energy bins, parameter axes, and parameter-coordinate interpolation methods. Recognised parameter names are `logxi`, `vturb`, and `lognH`/`log_nh` (case-insensitive). Supply each omitted singleton axis through `fixed_parameters`. Reading FITS files requires the `fits` extra.
 
-The general `wine.xspec.read_table_model(path)` reader can also evaluate one OGIP table directly. It supports regular interpolation grids and rejects additional-parameter spectra and XSPEC filter expressions.
+The general `wine.ogip.read_table_model(path)` reader can also evaluate one OGIP table directly. It supports regular interpolation grids and rejects additional-parameter spectra and XSPEC filter expressions.
 
 ## Interpolation
 

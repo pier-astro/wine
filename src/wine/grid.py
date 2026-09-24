@@ -8,7 +8,7 @@ from typing import Mapping
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
-from .xspec import read_table_model
+from .ogip import read_table_model
 
 
 class SpectralGrid:

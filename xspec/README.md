@@ -1,4 +1,4 @@
-# X-WINE XSPEC Models
+# WINE XSPEC Models
 
 XSPEC models for relativistic wind emission and absorption.
 
@@ -123,7 +123,7 @@ sums), never around multiplicative transmission spectra.
 ## Installation
 
 ```bash
-cd xwine
+cd xspec
 ./build.sh
 ```
 
@@ -137,7 +137,7 @@ hmake
 
 ```tcl
 # Load package
-lmod wine /path/to/xwine
+lmod wine /path/to/xspec
 
 # Emission convolution
 model windem*atable{emission.fits}
