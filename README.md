@@ -1,29 +1,52 @@
-# WINE v2
+# WINE — Wind in the Ionised Nuclear Environment
 
-Relativistic wind profiles, engine-independent Python spectral models (`import wine`), and local XSPEC models. WINE consumes precomputed spectra; ionization-engine runs and OGIP table production belong in `iongrid`.
+WINE is a spectroscopic model for emission and absorption from outflows around compact sources. It combines fast analytical wind profiles with accurate special relativistic energy shifts and viewing geometry, treating both spectral components consistently. It is designed for outflows up to mildly relativistic speeds, including ultra-fast outflows in active galactic nuclei (AGN), and can be used to explore winds in X-ray binaries and gamma-ray bursts when its assumptions apply.
 
-## Python
+## WINE 2.0
 
-From this checkout, install with `/usr/local/bin/python -m pip install -e '.[fits]'` in your chosen environment. `astropy` is needed only to read OGIP FITS tables. The model layer needs NumPy and SciPy, not CLOUDY or XSTAR.
+WINE 2.0 separates the wind model from the calculation of its rest-frame spectrum. It acts as a post-processing layer: users can supply their own spectra or generate them with photoionisation codes such as CLOUDY or XSTAR, then apply WINE's relativistic emission and absorption models. This makes it practical to explore individual wind shells and their geometry without rerunning a photoionisation calculation at every model evaluation. The present shell-based approach is aimed primarily at approximately Compton-thin winds (roughly $N_\mathrm{H} \lesssim 10^{24}\,\mathrm{cm}^{-2}$); its validity still depends on the supplied spectra and the physical assumptions of a particular application.
 
-`wine.SpectralGrid` accepts arrays of rest-frame optical depth and bin-integrated emission on `(logxi, vturb, log_nh, energy)` axes. `wine.SpectralGrid.from_tables(optical_depth={"absorption": "tau.fits"}, emission={"total": "emission.fits"})` reads matching OGIP exponential/multiplicative and additive tables. For tables that omit a singleton axis, pass its value in `fixed_parameters`, for example `{"vturb": 100.0}`. The grid exposes `optical_depth()` and `emitted()` for `absorption_slab()` and `emission_slab()`.
+This direction is motivated in part by the detail now accessible in high-resolution X-ray spectra from XRISM. The [original WINE implementation](https://baltig.infn.it/ionisation/wine) remains available as a complementary tool. It models a connected, initially homogeneous outflow through successive XSTAR calculations, retaining the coupled wind treatment useful for that approach.
 
-Spectral interpolation defaults to `interpolation="log"`: it interpolates log10 of nonnegative values, replacing exact zeros with `1e-30`. Select `interpolation="linear"` to retain exact zeros. The parameter interpolation method is linear for small grids and PCHIP when every axis has at least four points, matching the former Python `PlasmaGrid` choice. OGIP `METHOD=1` logarithmic parameter coordinates are respected. The standalone `wine.xspec.read_table_model(...).evaluate()` retains XSPEC's linear interpolation of table *spectra*; it is useful when reproducing XSPEC exactly. Consequently, WINE's default Python grid and XSPEC tables need not agree between grid nodes.
+## What is in this repository?
 
-## Local XSPEC build
+| Path | Contents |
+| --- | --- |
+| [`src/wine/`](src/wine/) | Python wind kernels, slab models, spectral grids, and OGIP table reader |
+| [`xwine/`](xwine/) | Local XSPEC models for emission profiles and relativistic spectral shifts |
+| [`tests/`](tests/) | Python tests for grids, table reading, and model evaluation |
+| [`docs/`](docs/) | API, spectral input, XSPEC, and development documentation |
 
-The canonical C++ sources are in `xwine/`. Initialize HEASoft/XSPEC on your laptop, then run:
+WINE reads precomputed spectra; it does not run CLOUDY or XSTAR. No production spectral grid is bundled with this repository.
+
+## Getting started
+
+For Python 3.10 or newer, install in an environment of your choice:
+
+```bash
+git clone https://github.com/pier-astro/wine.git
+cd wine
+python -m pip install -e '.[fits]'
+```
+
+The `fits` extra provides Astropy for OGIP FITS tables. NumPy and SciPy are the core Python dependencies. Import the model with `import wine`; see the [Python guide](docs/python.md) for array and table inputs, units, and examples.
+
+For XSPEC, initialize a local HEASoft/XSPEC installation, then build and load the models:
 
 ```bash
 cd xwine
 ./build.sh
-/usr/local/bin/python test_geometry_models.py
-./clean.sh
-./build.sh
+# In XSPEC: lmod wine /absolute/path/to/wine/xwine
 ```
 
-`build.sh` always starts from clean generated files. `clean.sh` removes only generated build products. Compiled libraries, objects, generated XSPEC files and local Python environments are ignored by Git; source files and build scripts are tracked. Load the built models in XSPEC with `lmod wine /absolute/path/to/wine-v2/xwine`.
+The [XSPEC guide](docs/xspec.md) describes the models, tests, and `./clean.sh` rebuild workflow. Generated binaries and local build files are excluded from Git.
 
-## Provenance
+## Documentation
 
-Initial Python kernels, slab models, OGIP reader and local XSPEC sources were extracted from `pier-astro/xflow` at commit `e55c58b`. The legacy `WINE/xwine` implementation was not copied. GPL-3.0-or-later licensing is retained.
+- [Python models and spectral inputs](docs/python.md)
+- [XSPEC models and local build](docs/xspec.md)
+- [Repository structure and development](docs/development.md)
+
+The physical model and its domain of validity will be documented in greater depth alongside the associated publication. The earlier WINE model is described in [Luminari et al. (2024)](https://arxiv.org/abs/2410.13933).
+
+WINE 2.0 is distributed under [GPL-3.0-or-later](LICENSE).
