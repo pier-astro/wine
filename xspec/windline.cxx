@@ -94,11 +94,13 @@ extern "C" void windlinelos(const RealArray& energy, const RealArray& params,
     const double uincl = params[1];
     const double tout_deg = params[2];
     const double tin_deg = params[3];
-    if (!std::isfinite(uincl) || uincl < 0.0 || uincl > 1.0 ||
+    // The XSPEC parameter bounds constrain fits; derivative probes can leave
+    // that range, so evaluate them with the underlying windline model.
+    if (!std::isfinite(uincl) ||
         !std::isfinite(tout_deg) || !std::isfinite(tin_deg) ||
         tout_deg <= tin_deg) {
         throw FunctionUtility::FunctionException(
-            "windlinelos: require 0 <= uincl <= 1 and tout > tin.");
+            "windlinelos: require finite uincl and tout > tin.");
     }
 
     RealArray physicalParams(params);
@@ -113,12 +115,12 @@ extern "C" void windlineoff(const RealArray& energy, const RealArray& params,
     const double tout_deg = params[2];
     const double tin_deg = params[3];
     const double region = params[4];
-    if (!std::isfinite(uview) || uview < 0.0 || uview > 1.0 ||
+    if (!std::isfinite(uview) ||
         !std::isfinite(tout_deg) || !std::isfinite(tin_deg) ||
         tin_deg < 0.0 || tout_deg > 90.0 || tout_deg <= tin_deg ||
         (region != 0.0 && region != 1.0)) {
         throw FunctionUtility::FunctionException(
-            "windlineoff: require 0 <= uview <= 1, "
+            "windlineoff: require finite uview, "
             "0 <= tin < tout <= 90 deg, and region = 0 or 1.");
     }
 

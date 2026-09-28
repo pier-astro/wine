@@ -21,6 +21,8 @@ grid = SpectralGrid(
     log_nh=[22.0, 23.0],
     optical_depth={"absorption": tau},
 )
+# Direct grid interpolation; no wind model is needed.
+rest_frame_tau = grid.optical_depth(logxi=3.5, vturb=100.0, log_nh=22.5)
 observed_energy = np.geomspace(0.5, 10.0, 500)
 transmission = absorption_slab(
     observed_energy, grid,
@@ -33,13 +35,14 @@ transmission = absorption_slab(
 
 ```python
 grid = SpectralGrid.from_tables(
-    optical_depth={"absorption": "tau.fits"},
-    emission={"total": "emission.fits"},
-    fixed_parameters={"vturb": 100.0},  # only if the tables omit this axis
+    optical_depth={"absorption": "optdepth.emod"},
+    emission={"lines": "linem.amod"},
 )
+rest_frame_tau = grid.optical_depth(logxi=3.5, vturb=100.0, log_nh=22.5)
+rest_frame_lines = grid.emitted(logxi=3.5, vturb=100.0, log_nh=22.5, mode="lines")
 ```
 
-These file names are placeholders; no production tables ship with WINE. Optical-depth tables may be exponential tables containing optical depth or multiplicative tables containing transmission. Emission tables must be additive and contain bin-integrated photons. All supplied tables must have identical energy bins, parameter axes, and parameter-coordinate interpolation methods. Recognised parameter names are `logxi`, `vturb`, and `lognH`/`log_nh` (case-insensitive). Supply each omitted singleton axis through `fixed_parameters`. Reading FITS files requires the `fits` extra.
+These file names match the bundled `iongrid` recipe but are placeholders; no production tables ship with WINE. Optical-depth tables may be exponential tables containing optical depth or multiplicative tables containing transmission. Emission tables must be additive and contain bin-integrated photons. All supplied tables must have identical energy bins, parameter axes, and parameter-coordinate interpolation methods. Recognised parameter names are `logxi`, `vturb`, and `lognH`/`log_nh` (case-insensitive). Supply each omitted singleton axis through `fixed_parameters`; omit `fixed_parameters` if all three axes vary in the tables. Reading FITS files requires the `fits` extra.
 
 The general `wine.ogip.read_table_model(path)` reader can also evaluate one OGIP table directly. It supports regular interpolation grids and rejects additional-parameter spectra and XSPEC filter expressions.
 
