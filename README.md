@@ -1,3 +1,6 @@
+![Schematic of the wind geometry and viewing angle](docs/images/wine-banner.png)
+
+
 # WINE — Wind in the Ionised Nuclear Environment
 
 WINE is a spectroscopic model for emission and absorption from outflows around compact astrophysical sources, particularly accreting black holes. It combines fast analytical outflow profiles with accurate special relativistic effects and viewing geometry, treating both spectral components consistently. It is designed for outflows up to mildly relativistic speeds, including ultra-fast outflows in active galactic nuclei (AGN), and can be used to explore winds in X-ray binaries and gamma-ray bursts when its assumptions apply.

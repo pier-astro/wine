@@ -63,6 +63,9 @@ Thumbs.db
 # Logs
 *.log
 
+# Logo
+logo/
+
 # Local agent guidance and iteration notes
 /.agents/
 /AGENTS.md
