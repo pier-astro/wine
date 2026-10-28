@@ -11,6 +11,10 @@ xspec/*.a
 xspec/*.so
 xspec/*.dylib
 /procedures/tclIndex
+/example/*.mmod
+/example/*.amod
+/example/results/*
+!/example/results/geometry.ipynb
 build/
 
 # Python

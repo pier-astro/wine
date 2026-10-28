@@ -14,9 +14,11 @@ static void warnFiniteGrid(const char* modelName) {
     static std::set<std::string> warnedModels;
     if (warnedModels.insert(modelName).second) {
         FunctionUtility::xsWrite("\n\t*** WINE " + std::string(modelName) +
-            " ENERGY-GRID NOTICE ***\n\tFinite grids require endpoint "
-            "extrapolation at their shifted edge. Use `energies extend low ...` "
-            "and/or `energies extend high ...` so that edge lies outside the detector response.\n",
+            " ENERGY-GRID NOTICE ***\n\tShifts use only the input spectrum "
+            "evaluated by XSPEC. Missing input energies can produce artificial "
+            "zeros near a shifted grid boundary. Use `energies extend low ...` "
+            "and/or `energies extend high ...` within the input table's energy "
+            "coverage, and check stability in the fitted band.\n",
             10);
     }
 }

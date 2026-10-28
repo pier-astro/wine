@@ -1,4 +1,4 @@
-![Schematic of the wind geometry and viewing angle](docs/images/wine-banner.png)
+![Banner](docs/images/wine-banner.png)
 
 
 # WINE — Wind in the Ionised Nuclear Environment
@@ -15,13 +15,13 @@ The [`wine v1` implementation](https://baltig.infn.it/ionisation/wine) remains a
 
 ## What is in this repository?
 
-| Path | Contents |
-| --- | --- |
-| [`src/wine/`](src/wine/) | Python wind kernels, slab models, standalone spectral-grid interpolation, and OGIP table reader |
-| [`xspec/`](xspec/) | Local XSPEC models for emission profiles and relativistic spectral shifts |
-| [`procedures/`](procedures/) | XSPEC commands for WINE viewing-angle covariance and profile limits |
-| [`tests/`](tests/) | Python tests for grids, table reading, and model evaluation |
-| [`docs/`](docs/) | API, spectral input, XSPEC, and development documentation |
+| Path                         | Contents                                                                                        |
+| ---------------------------- | ----------------------------------------------------------------------------------------------- |
+| [`src/wine/`](src/wine/)     | Python wind kernels, slab models, standalone spectral-grid interpolation, and OGIP table reader |
+| [`xspec/`](xspec/)           | Local XSPEC models for emission profiles and relativistic spectral shifts                       |
+| [`procedures/`](procedures/) | Tested profile-search implementation being adapted to the new geometry API                      |
+| [`tests/`](tests/)           | Python tests for grids, table reading, and model evaluation                                     |
+| [`docs/`](docs/)             | API, spectral input, XSPEC, and development documentation                                       |
 
 WINE reads precomputed spectra; it does not run CLOUDY or XSTAR. No production spectral grid is bundled with this repository.
 
@@ -50,93 +50,64 @@ cd xspec
 ./build.sh
 ```
 
-In XSPEC, load WINE and its viewing-angle procedures:
+In XSPEC, load WINE, your data, and a model with separate intrinsic absorption
+of the central continuum and wind emission:
 
 ```tcl
 lmod wine /absolute/path/to/wine/xspec
-source /absolute/path/to/wine/procedures/wine_inclination.tcl
-source /absolute/path/to/wine/procedures/wine_profile.tcl
-```
-
-The `source` commands apply to the current session. The [procedure guide](procedures/README.md) explains permanent installation.
-
-Load your data and responses from an XSPEC command file:
-
-```tcl
 @data.xcm
+model TBabs*((wind*mtable{cloudy.mmod})*powerlaw+windemlos*atable{cloudy.amod})
 ```
 
-Define a model with a wind-shifted absorption table (e.g., `cloudy.mmod`) and wind-broadened emission table (e.g., `cloudy.amod`):
+The table filenames are examples; supply your own spectra and set the table
+parameters. This development API replaces the previous angular coordinates:
+**convert old XCM sessions before loading them**. See the
+[model reference](xspec/README.md#emission-geometry-development-api).
 
-```tcl
-model TBabs*(wind*mtable{cloudy.mmod})*(powerlaw+windemlos*atable{cloudy.amod})
-```
+| Model | Parameters |
+| --- | --- |
+| `windem` | `vout, Cf, hole, incl` |
+| `windemlos` | `vout, Cf, skew, incl` |
+| `windemoff` | `vout, Cf, hole, view, region` |
 
-The table filenames are examples: supply your own compatible multiplicative and additive spectra. XSPEC prompts for their parameters. Inspect them and set suitable initial values before fitting. For this expression, components 2 and 5 are `wind` and `windemlos`; locate their velocity parameter numbers, link them, and fit:
+`Cf` is the wind's covering fraction of one hemisphere. Generic `hole` places
+the shell independently of `incl`. LoS `skew` instead places a shell that
+includes the fitted inclination. The off model uses `view` within a selected
+polar/equatorial sector; keep its `region` switch frozen and compare sectors
+in separate fits. These coordinate conversions share the same spectral kernel.
+
+For the expression above, link the absorption and emission velocities and
+identify the direct physical parameters:
 
 ```tcl
 show parameters
 set vabs [lindex [tcloutr compinfo 2] 1]
 set vem [lindex [tcloutr compinfo 5] 1]
 newpar $vem = p$vabs
-set uincl [expr {$vem + 1}]
+set cover [expr {$vem + 1}]
+set incl [expr {$vem + 3}]
+energies extend low 0.1 500 log
+energies extend high 30 500 log
 fit
+error 1. $cover $incl
 ```
 
-The WINE suite provides three versions of the emission convolution model:
-
-- `windem` uses `vout`, `incl`, `tout`, and `tin`: the wind velocity, viewing angle, outer opening angle, and inner opening angle. It leaves the viewing angle independent of the wind boundaries. If the model should require the line of sight to cross the wind, use `windemlos`.
-- `windemlos` enforces a line of sight through the wind. It replaces `incl` with the dimensionless fraction `uincl` (between 0 and 1), so `incl = tin + uincl × (tout − tin)`. The example above uses this model to connect emission and absorption geometry.
-- `windemoff` enforces a line of sight outside the wind. It replaces `incl` with `uview` (between 0 and 1) and uses a frozen `region` switch to select one of two possible geometries. For `region = 1`, the sightline lies beyond the outer wind boundary: `incl = tout + uview × (90° − tout)`. For `region = 0`, it lies in the polar cavity: `incl = (1 − uview) × tin`.
-
-To explore `windemoff`, fit `region = 1` and record the fit statistic, then set `region = 0` and refit. Compare the two solutions for the same data and statistic; keep `region` fixed within each fit. An absent absorption feature alone does not establish that the sightline misses the wind.
+Choose the energy margins and sampling for your velocities and supplied
+spectra, within their table support. Here `1.` is a change in statistic, not a
+sigma value. With no chains loaded, XSPEC profiles the two direct parameters
+separately, refitting other free parameters. The existing local covariance
+approximation and profile-convergence limitations still apply.
 
 ![Schematic of the wind geometry and viewing angle](docs/images/ConfigurationSchematic.png)
 
-### Error estimation
-
-With a gradient-based fit method such as Levenberg–Marquardt (`leven`), XSPEC reports local parameter uncertainties from the fit covariance matrix. These are a quick guide when the fit statistic is approximately quadratic around the minimum. They can be misleading near parameter boundaries, with strong degeneracies, or when the statistic has a non-quadratic or multimodal shape.
-
-For `windemlos` and `windemoff`, XSPEC's uncertainty on `uincl` or `uview` describes a dimensionless fraction, not the uncertainty on the physical viewing angle. That angle also depends on `tin` and `tout`. To propagate the full covariance to a local 1-sigma uncertainty in degrees, use:
-
-```tcl
-wineinclcov $uincl
-```
-
-This includes covariance with free opening angles but retains the local Gaussian approximation. With no XSPEC chains loaded, obtain profile limits on the ordinary free model parameters by refitting the others at each trial value:
-
-```tcl
-error 1. 1-[tcloutr modpar]
-```
-
-The resulting interval for `uincl` is **not** generally an interval for the viewing angle if either opening angle varies. WINE can profile the physical angle directly by holding it fixed while refitting the other parameters:
-
-```tcl
-wineinclprofile 1. $uincl
-puts $xspec_tclout
-```
-
-`wineinclprofile` is WINE's counterpart to XSPEC `error` for the **physical viewing angle**: it fixes that angle and refits the other free parameters, including the opening angles. It prints the confidence range in degrees. `$xspec_tclout` provides unrounded limits and diagnostic flags for scripts; see the [procedure reference](procedures/README.md#wineinclprofile). As with any profile interval, fit convergence and the behavior near boundaries matter.
-
-`wineinclerror` is a convenience wrapper around XSPEC `error` for a directly fitted `incl`, or for `uincl`/`uview` when both opening angles are frozen and unlinked. In the latter case it converts the native limits to degrees. This is also a profile in that special case, but cannot profile the physical angle when the opening angles are free. See the [XSPEC guide](docs/xspec.md) for details. In XSPEC `error` and `wineinclprofile`, the leading decimal is **Δstat**, not a sigma value; `1.` corresponds approximately to 1 sigma for one parameter of interest.
-
-### MCMC alternative
-
-For posterior intervals, XSPEC can sample the free parameters jointly. After fitting, a minimal example is:
-
-```tcl
-chain type gw
-chain walkers 20
-chain burn 2000
-chain length 20000
-chain run wine_chain.fits
-chain stat $uincl
-plot chain $uincl
-```
-
-The lengths are illustrative: set appropriate priors and inspect chain mixing and convergence before using its intervals. MCMC samples the free parameters *jointly*, so the dependence of `incl` on `uincl` or `uview` and the opening angles does not require a new fit parameterization. For **each retained sample**, calculate the physical angle with the relevant formula above, using sampled values for free parameters and fixed values for frozen ones. Then take quantiles of the resulting angle samples. This preserves correlations and nonlinear effects; transforming only the separate marginal error bars on `uincl` or `uview` would not. For `windemoff`, analyse the two fixed `region` cases separately. The FITS chain can also be analysed outside XSPEC. Posterior credible intervals depend on the chosen priors and differ from profile confidence intervals.
-
-XSPEC automatically loads a completed chain. While one is loaded, `error` reports intervals from chain samples rather than doing profile refits. Run `chain clear` to unload chains before requesting an `error` profile; this leaves the saved FITS files intact. See the [XSPEC chain guide](https://heasarc.gsfc.nasa.gov/docs/software/xspec/manual/node105.html) for settings and diagnostics.
+Physical `tin`/`tout` and off-model inclination can be reconstructed with
+Python's `Geometry` constructors, including joint posterior arrays. Native
+errors on `hole`, `skew`, or `view` are not errors on those derived angles.
+The consolidated `windgeom`, `winderror`, and `windsteppar` procedures are
+available with documented constraint and covariance limits in the
+[procedure guide](procedures/README.md); older `wineincl*` commands do not support
+the new coordinates. The model/geometry implementation should be validated for your
+analysis before replacing scientific fit results.
 
 The [XSPEC guide](docs/xspec.md) also covers the models, tests, and `./clean.sh` rebuild workflow. Generated binaries and local build files are excluded from Git.
 

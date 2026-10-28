@@ -1,97 +1,87 @@
 #!/usr/bin/env python3
-"""Check that geometry wrappers reproduce the corresponding base models."""
+"""Check new coordinates against generic spectra at identical physical angles.
 
-from math import isclose
+Run after building the local package. Python Geometry also has independent
+bracketed-root tests in tests/test_geometry.py. This checks the C++/XSPEC
+conversion, endpoint behavior, registration, and hemispheric normalization.
+"""
 from pathlib import Path
+import sys
 
+import numpy as np
 from xspec import AllModels, Model, Xset
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from wine import Geometry
 
 PACKAGE_DIR = Path(__file__).resolve().parent
-ENERGY_GRID = "0.1 20.0 1000 log"
 
 
 def evaluate(expression, parameters):
-    """Evaluate one model on the fixed test grid and return its flux array."""
     AllModels.clear()
     model = Model(expression)
+    model.setPars(*parameters)
     for index in range(1, model.nParameters + 1):
         if model(index).name == "region":
-            assert model(index).frozen, "region must remain a frozen XSPEC switch"
-    for index, value in enumerate(parameters, start=1):
-        if model(index).values[0] != value:
-            model(index).values = str(value)
-    return tuple(model.values(0))
+            assert model(index).frozen
+    flux = np.asarray(model.values(0))
+    assert np.all(np.isfinite(flux)), (expression, parameters)
+    return flux
 
 
-def assert_same(actual, expected, label):
-    """Require numerical identity to round-off across the full energy grid."""
-    assert len(actual) == len(expected)
-    assert all(
-        isclose(left, right, rel_tol=1.0e-13, abs_tol=1.0e-15)
-        for left, right in zip(actual, expected)
-    ), label
+def generic_parameters(beta, geometry):
+    cover = float(geometry.Cf)
+    hole = ((1.0 - np.cos(np.deg2rad(geometry.tin))) / (1.0 - cover)
+            if cover < 1.0 else 0.5)
+    return [beta, cover, float(np.clip(hole, 0.0, 1.0)), float(geometry.incl)]
 
 
 def main():
-    """Exercise in-cone and both off-cone model parameterizations."""
     Xset.chatter = 0
     AllModels.lmod("wine", str(PACKAGE_DIR))
-    AllModels.setEnergies(ENERGY_GRID)
+    AllModels.setEnergies("0.1 30 2000 log")
+    for cover in (0.0, 0.3, 1.0):
+        for skew in (0.0, 0.5, 1.0):
+            for inclination in (0.0, 45.0, 90.0):
+                geometry = Geometry.los(Cf=cover, skew=skew, incl=inclination)
+                for beta in (0.0, 0.25):
+                    parameters = [beta, cover, skew, inclination]
+                    physical = generic_parameters(beta, geometry)
+                    for family, suffix in (("windem", "*gaussian"), ("windline", "")):
+                        extra = [6.7, 0.025, 1.0] if suffix else [6.7, 1.0]
+                        actual = evaluate(family + "los" + suffix, parameters + extra)
+                        expected = evaluate(family + suffix, physical + extra)
+                        np.testing.assert_allclose(actual, expected, rtol=1e-9, atol=1e-13)
 
-    beta = 0.2
-    uview = 0.25
-    tout = 60.0
-    tin = 30.0
-    line_energy = 6.5
+    for region, name in ((0, "polar"), (1, "equatorial")):
+        for hole in (0.0, 0.5, 1.0):
+            for view in (0.0, 0.5, 1.0):
+                geometry = Geometry.off(Cf=0.3, hole=hole, view=view, region=name)
+                for family, suffix in (("windem", "*gaussian"), ("windline", "")):
+                    extra = [6.7, 0.025, 1.0] if suffix else [6.7, 1.0]
+                    actual = evaluate(family + "off" + suffix, [0.25, 0.3, hole, view, region] + extra)
+                    expected = evaluate(family + suffix, generic_parameters(0.25, geometry) + extra)
+                    np.testing.assert_allclose(actual, expected, rtol=1e-9, atol=1e-13)
 
-    for uincl, inclination in ((0.0, tin), (0.25, 37.5), (1.0, tout)):
-        los_convolution = evaluate(
-            "windemlos*powerlaw", (beta, uincl, tout, tin, 2.0, 1.0)
-        )
-        base_convolution = evaluate(
-            "windem*powerlaw", (beta, inclination, tout, tin, 2.0, 1.0)
-        )
-        assert_same(los_convolution, base_convolution, f"windemlos uincl={uincl}")
+    # No Doppler shift: a narrow line integrates to Cf/2 of its input norm.
+    for family, suffix in (("windem", "*gaussian"), ("windline", "")):
+        extra = [6.7, 0.025, 1.0] if suffix else [6.7, 1.0]
+        flux = evaluate(family + "los" + suffix, [0.0, 0.3, 0.5, 45.0] + extra)
+        np.testing.assert_allclose(flux.sum(), 0.15, rtol=1e-7)
 
-        los_line = evaluate(
-            "windlinelos", (beta, uincl, tout, tin, line_energy, 1.0)
-        )
-        base_line = evaluate(
-            "windline", (beta, inclination, tout, tin, line_energy, 1.0)
-        )
-        assert_same(los_line, base_line, f"windlinelos uincl={uincl}")
-
-    for region, inclination in ((0, 22.5), (1, 67.5)):
-        off_convolution = evaluate(
-            "windemoff*powerlaw",
-            (beta, uview, tout, tin, region, 2.0, 1.0),
-        )
-        base_convolution = evaluate(
-            "windem*powerlaw",
-            (beta, inclination, tout, tin, 2.0, 1.0),
-        )
-        assert_same(
-            off_convolution,
-            base_convolution,
-            f"windemoff region={region} differs from windem at incl={inclination}",
-        )
-
-        off_line = evaluate(
-            "windlineoff",
-            (beta, uview, tout, tin, region, line_energy, 1.0),
-        )
-        base_line = evaluate(
-            "windline",
-            (beta, inclination, tout, tin, line_energy, 1.0),
-        )
-        assert_same(
-            off_line,
-            base_line,
-            f"windlineoff region={region} differs from windline at incl={inclination}",
-        )
-
-    print("windem/windline geometry checks passed")
+    # Reusing a model must not leave an earlier nonzero spectrum at Cf=0.
+    for expression, extra in (("windemlos*powerlaw", [2.0, 1.0]),
+                              ("windlinelos", [6.7, 1.0])):
+        AllModels.clear()
+        model = Model(expression)
+        model.setPars(*([0.25, 0.3, 0.5, 45.0] + extra))
+        reference = np.asarray(model.values(0))
+        model(2).values = "0"
+        assert np.all(np.asarray(model.values(0)) == 0.0)
+        model(2).values = "0.3"
+        np.testing.assert_allclose(model.values(0), reference, rtol=1e-12, atol=1e-15)
+        assert [model(i).name for i in range(1, 5)] == ["vout", "Cf", "skew", "incl"]
+    print("Geometry and normalization checks passed")
 
 
 if __name__ == "__main__":

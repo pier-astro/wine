@@ -5,18 +5,8 @@
  * Convolves emission spectra with relativistic outflow profile using FFT.
  * Uses 2x oversampling and works in flux per d(log E) for correct Jacobian.
  *
- * Parameters:
- *   vout  - Outflow velocity in units of c (beta = v/c)
- *   incl  - Inclination angle in degrees
- *   tout  - Outer opening angle in degrees
- *   tin   - Inner opening angle in degrees
- *
- * windemlos replaces incl with uincl in [0, 1] and evaluates
- * incl = tin + uincl * (tout - tin), forcing the line of sight through the wind.
- *
- * windemoff replaces incl with uview in [0, 1] and a fixed region switch:
- *   region = 0: incl = (1 - uview) * tin       (polar cavity)
- *   region = 1: incl = tout + uview * (90 - tout) (outside the wind cone)
+ * Public coordinates are converted to physical angles once, before the
+ * shared convolution. Cf is the occupied fraction of one hemisphere.
  */
 
 #include <xsTypes.h>
@@ -28,6 +18,8 @@
 #include <vector>
 
 #include "wine_lineshape.h"
+#include "wine_geometry.h"
+#include "wine_xspec.h"
 
 #if __has_include("fftw3.h")
 #  include "fftw3.h"
@@ -63,26 +55,16 @@ static int nextPowerOfTwo(int n) {
     return result;
 }
 
-extern "C" void windem(const RealArray& energy, const RealArray& params,
-                       int spectrum, RealArray& flux, RealArray& fluxErr,
-                       const string& init) {
-    double beta = params[0];
-    double incl_deg = params[1];
-    double tout_deg = params[2];
-    double tin_deg = params[3];
-
-    if (!std::isfinite(beta) || beta < 0.0 || beta >= 1.0 ||
-        tout_deg <= tin_deg) {
-        throw FunctionUtility::FunctionException(
-            "windem: require 0 <= vout < 1 and tout > tin.");
-    }
-
-    double incl = incl_deg * wine::kDeg2Rad;
-    double theta_out = tout_deg * wine::kDeg2Rad;
-    double theta_in = tin_deg * wine::kDeg2Rad;
-
+static void convolveEmission(const RealArray& energy, double beta,
+                             const wine::Geometry& geometry, int spectrum,
+                             RealArray& flux, RealArray& fluxErr) {
     const int n_bins = static_cast<int>(energy.size()) - 1;
+    fluxErr.resize(0);
     if (n_bins <= 0) {
+        return;
+    }
+    if (geometry.Cf == 0.0) {
+        flux = 0.0;
         return;
     }
     for (int i = 0; i < n_bins; ++i) {
@@ -91,13 +73,9 @@ extern "C" void windem(const RealArray& energy, const RealArray& params,
                 "windem: energy edges must be positive and strictly increasing.");
         }
     }
-    fluxErr.resize(0);
-
     if (std::abs(beta) < 1e-10) {
-        double solid_angle = 2.0 * wine::kPi * (std::cos(theta_in) - std::cos(theta_out));
-        double fraction = solid_angle / (4.0 * wine::kPi);
         for (int i = 0; i < n_bins; ++i) {
-            flux[i] *= fraction;
+            flux[i] *= geometry.Cf / 2.0;
         }
         return;
     }
@@ -106,8 +84,10 @@ extern "C" void windem(const RealArray& energy, const RealArray& params,
     if (warnedSpectra.insert(spectrum).second) {
         FunctionUtility::xsWrite(
             "\n\t*** WINE windem ENERGY-GRID NOTICE ***\n"
-            "\tEmission shifted beyond a finite model grid is physically lost. "
-            "Extend both energy boundaries beyond the fitted detector band.\n",
+            "\tConvolution uses only the input spectrum evaluated by XSPEC. "
+            "Missing input energies can suppress emission near a grid boundary. "
+            "Extend the model grid beyond the fitted band, within the input "
+            "table's energy coverage, and check stability in the fitted band.\n",
             10);
     }
 
@@ -143,13 +123,13 @@ extern "C" void windem(const RealArray& energy, const RealArray& params,
         E_kernel[i] = std::exp(static_cast<double>(k) * dlog);
     }
 
-    wine::lineshape(E_kernel.data(), n_os, 1.0, beta, incl, theta_in, theta_out, kernel_raw.data());
+    wine::lineshape(E_kernel.data(), n_os, 1.0, beta, geometry.incl,
+                    geometry.tin, geometry.tout, kernel_raw.data());
     for (int i = 0; i < n_os; ++i) {
         kernel_logE[i] = kernel_raw[i] * E_kernel[i];
     }
 
-    const double fraction =
-        (std::cos(theta_in) - std::cos(theta_out)) / 2.0;
+    const double fraction = geometry.Cf / 2.0;
     double kernelSum = 0.0;
     for (int i = 0; i < n_os; ++i) {
         kernel_logE[i] *= dlog;
@@ -211,46 +191,39 @@ extern "C" void windem(const RealArray& energy, const RealArray& params,
     for (int i = 0; i < n_bins; ++i) flux[i] = result[i];
 }
 
+extern "C" void windem(const RealArray& energy, const RealArray& params,
+                        int spectrum, RealArray& flux, RealArray& fluxErr,
+                        const string& init) {
+    const double beta = wine::boundedParameter(params[0], 0.0, 0.99, "vout", spectrum);
+    const double Cf = wine::boundedParameter(params[1], 0.0, 1.0, "Cf", spectrum);
+    const double hole = wine::boundedParameter(params[2], 0.0, 1.0, "hole", spectrum);
+    const double incl = wine::boundedParameter(params[3], 0.0, 90.0, "incl", spectrum);
+    const wine::Geometry geometry = wine::freeGeometry(Cf, hole, incl * wine::kDeg2Rad);
+    convolveEmission(energy, beta, geometry, spectrum, flux, fluxErr);
+}
+
 extern "C" void windemlos(const RealArray& energy, const RealArray& params,
                            int spectrum, RealArray& flux, RealArray& fluxErr,
                            const string& init) {
-    const double uincl = params[1];
-    const double tout_deg = params[2];
-    const double tin_deg = params[3];
-    // XSPEC keeps fitted uincl in [0, 1], but Levenberg evaluates finite
-    // differences beyond hard limits. Evaluate those probes with windem.
-    if (!std::isfinite(uincl) ||
-        !std::isfinite(tout_deg) || !std::isfinite(tin_deg) ||
-        tout_deg <= tin_deg) {
-        throw FunctionUtility::FunctionException(
-            "windemlos: require finite uincl and tout > tin.");
-    }
-
-    RealArray physicalParams(params);
-    physicalParams[1] = tin_deg + uincl * (tout_deg - tin_deg);
-    windem(energy, physicalParams, spectrum, flux, fluxErr, init);
+    const double beta = wine::boundedParameter(params[0], 0.0, 0.99, "vout", spectrum);
+    const double Cf = wine::boundedParameter(params[1], 0.0, 1.0, "Cf", spectrum);
+    const double skew = wine::boundedParameter(params[2], 0.0, 1.0, "skew", spectrum);
+    const double incl = wine::boundedParameter(params[3], 0.0, 90.0, "incl", spectrum);
+    const wine::Geometry geometry = wine::losGeometry(Cf, skew, incl * wine::kDeg2Rad);
+    convolveEmission(energy, beta, geometry, spectrum, flux, fluxErr);
 }
 
 extern "C" void windemoff(const RealArray& energy, const RealArray& params,
                            int spectrum, RealArray& flux, RealArray& fluxErr,
                            const string& init) {
-    const double uview = params[1];
-    const double tout_deg = params[2];
-    const double tin_deg = params[3];
-    const double region = params[4];
-    // Keep the same numerical extension for finite-difference probes.
-    if (!std::isfinite(uview) ||
-        !std::isfinite(tout_deg) || !std::isfinite(tin_deg) ||
-        tin_deg < 0.0 || tout_deg > 90.0 || tout_deg <= tin_deg ||
-        (region != 0.0 && region != 1.0)) {
+    const double beta = wine::boundedParameter(params[0], 0.0, 0.99, "vout", spectrum);
+    const double Cf = wine::boundedParameter(params[1], 0.0, 1.0, "Cf", spectrum);
+    const double hole = wine::boundedParameter(params[2], 0.0, 1.0, "hole", spectrum);
+    const double view = wine::boundedParameter(params[3], 0.0, 1.0, "view", spectrum);
+    if (params[4] != 0.0 && params[4] != 1.0) {
         throw FunctionUtility::FunctionException(
-            "windemoff: require finite uview, "
-            "0 <= tin < tout <= 90 deg, and region = 0 or 1.");
+            "windemoff: region must be 0 (polar) or 1 (equatorial).");
     }
-
-    RealArray physicalParams(params);
-    physicalParams[1] = region == 0.0
-        ? (1.0 - uview) * tin_deg
-        : tout_deg + uview * (90.0 - tout_deg);
-    windem(energy, physicalParams, spectrum, flux, fluxErr, init);
+    const wine::Geometry geometry = wine::offGeometry(Cf, hole, view, static_cast<int>(params[4]));
+    convolveEmission(energy, beta, geometry, spectrum, flux, fluxErr);
 }

@@ -4,6 +4,7 @@ import numpy as np
 import warnings
 
 from .grid import SpectralGrid
+from .geometry import Geometry
 from .kernels import convolve
 
 # Speed of light in km/s
@@ -161,9 +162,7 @@ def emission_slab(
     log_nh: float,
     vturb: float,
     beta: float,
-    incl: float,
-    theta_in: float,
-    theta_out: float,
+    geometry: Geometry,
     norm: float,
     z: float = 0.0,
     method: str = "fft",
@@ -185,12 +184,10 @@ def emission_slab(
         Microturbulent velocity in km/s.
     beta : float
         Relativistic bulk outflow velocity of the wind (v/c).
-    incl : float
-        Inclination of the observer relative to the wind axis in radians.
-    theta_in : float
-        Inner opening angle of the emitting wind in radians.
-    theta_out : float
-        Outer opening angle of the emitting wind in radians.
+    geometry : Geometry
+        Physical shell and viewing geometry, with public angles in degrees.
+        Spectral evaluation requires scalar geometry; constructors also support
+        arrays for posterior/scan conversion.
     norm : float
         Global normalization scaling factor (e.g., area / 4pi d_L^2).
     z : float, optional
@@ -215,8 +212,13 @@ def emission_slab(
         raise TypeError(f"vturb must be a scalar number, got {type(vturb)}")
     if not 0.0 <= beta < 1.0:
         raise ValueError("Relativistic outflow velocity beta must be in the half-open interval [0, 1).")
-    if not 0.0 <= theta_in < theta_out <= np.pi:
-        raise ValueError("Wind opening angles must satisfy 0 <= theta_in < theta_out <= pi.")
+    if not isinstance(geometry, Geometry):
+        raise TypeError("geometry must be a Geometry instance.")
+    if any(np.ndim(value) != 0 for value in (geometry.incl, geometry.tin, geometry.tout)):
+        raise ValueError("Spectral evaluation requires scalar geometry.")
+    if geometry.Cf == 0.0:
+        return np.zeros_like(E_obs, dtype=float)
+    incl, theta_in, theta_out = np.deg2rad([geometry.incl, geometry.tin, geometry.tout])
 
     # 2. Clamp grid parameters to the pre-computed grid boundaries
     logxi_clamped = np.clip(logxi, grid.logxi[0], grid.logxi[-1])

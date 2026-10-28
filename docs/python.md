@@ -57,9 +57,50 @@ Parameter coordinates follow OGIP `METHOD=0` (linear) or `METHOD=1` (logarithmic
 | Function | Input spectrum | Output | Main controls |
 | --- | --- | --- | --- |
 | `absorption_slab(E_obs, grid, ...)` | Rest-frame optical depth | Transmission on observer-frame energy centres | `logxi`, `log_nh`, `vturb`, line-of-sight `beta`, covering fraction `C_f`, redshift `z`, optical-depth `mode` |
-| `emission_slab(E_obs, grid, ...)` | Rest-frame bin-integrated emission | Observer-frame photon-flux density, scaled by `norm` | Grid coordinates, outflow `beta`, `incl`, `theta_in`, `theta_out`, `norm`, `z`, convolution `method`, emission `mode` |
+| `emission_slab(E_obs, grid, ...)` | Rest-frame bin-integrated emission | Observer-frame photon-flux density, scaled by `norm` | Grid coordinates, outflow `beta`, `geometry`, `norm`, `z`, convolution `method`, emission `mode` |
 
-`E_obs` is an increasing array of energy centres in keV. The emission angles are **radians** in Python; the XSPEC local models use **degrees**. Positive absorption `beta=v/c` denotes motion toward the observer and blueshifts features. `C_f` lies between zero and one. The slab functions clamp grid coordinates to the supplied tabulated ranges; validate the scientific suitability of any clamped evaluation in your analysis.
+`E_obs` is an increasing array of energy centres in keV. Public `Geometry`
+angles and XSPEC inclination parameters are in **degrees**; conversion to
+radians occurs at the numerical-kernel boundary. The low-level functions in
+`wine.kernels` still take radians. Positive absorption `beta=v/c` denotes motion
+toward the observer and blueshifts features. Absorption `C_f` lies between zero
+and one and is distinct from the wind's hemispheric `Geometry.Cf`. The slab
+functions clamp grid coordinates to supplied table ranges; validate the
+scientific suitability of any clamped evaluation in your analysis.
+
+## Physical geometry
+
+```python
+from wine import Geometry
+
+explicit = Geometry.angles(incl=45, tin=30, tout=60)
+generic = Geometry.free(Cf=0.3, hole=0.5, incl=45)
+through_wind = Geometry.los(Cf=0.3, skew=0.5, incl=45)
+outside = Geometry.off(Cf=0.3, hole=0.5, view=0.5, region="polar")
+print(through_wind.incl, through_wind.tin, through_wind.tout, through_wind.Cf)
+```
+
+These constructors produce the same physical representation and perform no
+spectral calculation. `Cf=cos(tin)-cos(tout)` is relative to one hemisphere;
+the spectral full-sphere angular scaling remains `Cf/2`. They accept broadcast
+arrays for converting joint chain samples or scans. A single spectrum requires
+scalar geometry:
+
+```python
+flux = emission_slab(
+    E_obs, grid, logxi=4.0, log_nh=23.0, vturb=2000.0,
+    beta=0.25, geometry=through_wind, norm=1.0,
+)
+```
+
+Fractions must be finite and inside [0, 1]; public angles must be inside
+0--90 degrees. Inverted explicit boundaries warn and represent zero emission.
+Zero coverage and collapsed off sectors are limiting geometries, not measured
+angles. The [XSPEC model reference](../xspec/README.md) explains `hole`, `skew`,
+and `view`, which have distinct meanings. Joint posterior samples retain
+their correlations when transformed; a converted native-coordinate scan is
+not generally a profile of derived axes that also depend on refitted nuisance
+parameters.
 
 For emission, `norm` is a simple multiplicative factor. WINE does not infer a source luminosity, distance, or shell covering factor from the FITS header. The returned flux density inherits the grid producer's photon normalisation divided by energy-bin width and multiplied by `norm`. For a consistent joint model, emission and absorption spectra must use compatible physical conditions and conventions.
 

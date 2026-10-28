@@ -218,32 +218,37 @@ proc _wine_profile_check_improvement {angle stat bestStat toler} {
         "a better fit was found"
 }
 
-proc _wine_profile_side {ctx center bestStat delta toler direction pointsVar} {
+proc _wine_profile_side {ctx center bestStat delta toler direction pointsVar {trialCommand _wine_profile_trial}} {
     upvar 1 $pointsVar points
     set previous $center
     set previousStat $bestStat
     set step 1.0
     set low 1.0e-5
     set high [expr {90.0 - 1.0e-5}]
-    foreach name {tin tout} {
-        set entry [dict get $ctx $name]
-        if {[dict get $entry free]} {continue}
-        set value [lindex [dict get $entry spec] 0]
-        set kind [dict get $ctx kind]
-        if {$kind eq "uincl"} {
-            if {$name eq "tin"} {set low [expr {max($low, $value)}]}
-            if {$name eq "tout"} {set high [expr {min($high, $value)}]}
-        } elseif {[dict get $ctx region] == 0 && $name eq "tin"} {
-            set high [expr {min($high, $value)}]
-        } elseif {[dict get $ctx region] == 1 && $name eq "tout"} {
-            set low [expr {max($low, $value)}]
+    if {[dict exists $ctx profile_bounds]} {
+        lassign [dict get $ctx profile_bounds] low high
+    } else {
+        foreach name {tin tout} {
+            set entry [dict get $ctx $name]
+            if {[dict get $entry free]} {continue}
+            set value [lindex [dict get $entry spec] 0]
+            set kind [dict get $ctx kind]
+            if {$kind eq "uincl"} {
+                if {$name eq "tin"} {set low [expr {max($low, $value)}]}
+                if {$name eq "tout"} {set high [expr {min($high, $value)}]}
+            } elseif {[dict get $ctx region] == 0 && $name eq "tin"} {
+                set high [expr {min($high, $value)}]
+            } elseif {[dict get $ctx region] == 1 && $name eq "tout"} {
+                set low [expr {max($low, $value)}]
+            }
         }
     }
     set edge [expr {$direction < 0 ? $low : $high}]
+    if {($direction < 0 && $center <= $edge) || ($direction > 0 && $center >= $edge)} {return [list boundary $center]}
     for {set trial 0} {$trial < 14} {incr trial} {
         set angle [expr {$direction < 0 ? max($edge, $center - $step) : min($edge, $center + $step)}]
         if {abs($angle - $previous) < 1.0e-8} {return [list boundary $previous]}
-        set stat [_wine_profile_trial $ctx $angle]
+        set stat [{*}$trialCommand $ctx $angle]
         lappend points [list $angle $stat]
         set excess [expr {$stat - $bestStat}]
         _wine_profile_check_improvement $angle $stat $bestStat $toler
@@ -254,7 +259,7 @@ proc _wine_profile_side {ctx center bestStat delta toler direction pointsVar} {
             set outsideStat $stat
             for {set refine 0} {$refine < 22} {incr refine} {
                 set middle [expr {($inside + $outside) / 2.0}]
-                set stat [_wine_profile_trial $ctx $middle]
+                set stat [{*}$trialCommand $ctx $middle]
                 lappend points [list $middle $stat]
                 set excess [expr {$stat - $bestStat}]
                 _wine_profile_check_improvement $middle $stat $bestStat $toler

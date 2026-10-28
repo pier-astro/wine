@@ -7,7 +7,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from wine import SpectralGrid, absorption_slab, emission_slab
+from wine import Geometry, SpectralGrid, absorption_slab, emission_slab
 from test_ogip_table import write_test_table
 
 
@@ -39,7 +39,7 @@ class SpectralGridTest(unittest.TestCase):
         np.testing.assert_allclose(transmission, np.exp(-10.0))
         flux = emission_slab(
             np.linspace(1.0, 4.0, 20), grid, 3.5, 21.0, 100.0,
-            0.1, 0.5, 0.0, 1.0, 1.0,
+            0.1, Geometry.angles(incl=np.rad2deg(0.5), tin=0.0, tout=np.rad2deg(1.0)), 1.0,
         )
         self.assertEqual(flux.shape, (20,))
         self.assertTrue(np.all(np.isfinite(flux)))
