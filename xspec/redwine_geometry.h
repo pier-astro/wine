@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace wine {
+namespace redwine {
 
 // Physical angles are radians. Cf = Omega/(2*pi) for one hemisphere.
 struct Geometry {
@@ -55,4 +55,4 @@ inline Geometry offGeometry(double Cf, double hole, double view, int region) {
     return geometry;
 }
 
-} // namespace wine
+} // namespace redwine

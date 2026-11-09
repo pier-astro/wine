@@ -12,7 +12,7 @@ import numpy as np
 from xspec import AllModels, Model, Xset
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from wine import Geometry
+from redwine import Geometry
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 
@@ -20,7 +20,10 @@ PACKAGE_DIR = Path(__file__).resolve().parent
 def evaluate(expression, parameters):
     AllModels.clear()
     model = Model(expression)
+    if parameters[0] < 0:
+        model(1).values = [0.1, 0.01, -0.99, -0.99, 0.99, 0.99]
     model.setPars(*parameters)
+    assert model(1).values[0] == parameters[0]
     for index in range(1, model.nParameters + 1):
         if model(index).name == "region":
             assert model(index).frozen
@@ -38,7 +41,7 @@ def generic_parameters(beta, geometry):
 
 def main():
     Xset.chatter = 0
-    AllModels.lmod("wine", str(PACKAGE_DIR))
+    AllModels.lmod("redwine", str(PACKAGE_DIR))
     AllModels.setEnergies("0.1 30 2000 log")
     for cover in (0.0, 0.3, 1.0):
         for skew in (0.0, 0.5, 1.0):
@@ -47,31 +50,62 @@ def main():
                 for beta in (0.0, 0.25):
                     parameters = [beta, cover, skew, inclination]
                     physical = generic_parameters(beta, geometry)
-                    for family, suffix in (("windem", "*gaussian"), ("windline", "")):
+                    for family, suffix in (("wem", "*gaussian"), ("wline", "")):
                         extra = [6.7, 0.025, 1.0] if suffix else [6.7, 1.0]
-                        actual = evaluate(family + "los" + suffix, parameters + extra)
-                        expected = evaluate(family + suffix, physical + extra)
+                        actual = evaluate(family + "los_Cf" + suffix, parameters + extra)
+                        expected = evaluate(family + "_Cf" + suffix, physical + extra)
                         np.testing.assert_allclose(actual, expected, rtol=1e-9, atol=1e-13)
 
     for region, name in ((0, "polar"), (1, "equatorial")):
         for hole in (0.0, 0.5, 1.0):
             for view in (0.0, 0.5, 1.0):
                 geometry = Geometry.off(Cf=0.3, hole=hole, view=view, region=name)
-                for family, suffix in (("windem", "*gaussian"), ("windline", "")):
+                for family, suffix in (("wem", "*gaussian"), ("wline", "")):
                     extra = [6.7, 0.025, 1.0] if suffix else [6.7, 1.0]
-                    actual = evaluate(family + "off" + suffix, [0.25, 0.3, hole, view, region] + extra)
-                    expected = evaluate(family + suffix, generic_parameters(0.25, geometry) + extra)
+                    actual = evaluate(family + "off_Cf" + suffix, [0.25, 0.3, hole, view, region] + extra)
+                    expected = evaluate(family + "_Cf" + suffix, generic_parameters(0.25, geometry) + extra)
                     np.testing.assert_allclose(actual, expected, rtol=1e-9, atol=1e-13)
 
+    for beta in (-0.25, 0.0, 0.25):
+        for family, suffix, extra in (
+            ("wem", "*gaussian", [6.7, 0.025, 1.0]),
+            ("wline", "", [6.7, 1.0]),
+        ):
+            for flavor in ("", "los", "off"):
+                regions = (0, 1) if flavor == "off" else (None,)
+                for region in regions:
+                    for hole in (0.0, 0.5, 1.0):
+                        cover = 0.3
+                        if flavor == "los":
+                            geometry = Geometry.los(Cf=cover, skew=hole, incl=45.0)
+                            cf = [cover, hole, 45.0]
+                            view = [(geometry.incl - geometry.tin) / (geometry.tout - geometry.tin)]
+                        elif flavor == "off":
+                            sector = "polar" if region == 0 else "equatorial"
+                            geometry = Geometry.off(Cf=cover, hole=hole, view=0.25, region=sector)
+                            cf = [cover, hole, 0.25, region]
+                            view = [0.75 if region == 0 else 0.25, region]
+                        else:
+                            geometry = Geometry.free(Cf=cover, hole=hole, incl=45.0)
+                            cf = [cover, hole, 45.0]
+                            view = [45.0]
+                        angles = [geometry.tin, geometry.tout, *view]
+                        actual = evaluate(family + flavor + suffix, [beta, *angles, *extra])
+                        expected = evaluate(family + flavor + "_Cf" + suffix, [beta, *cf, *extra])
+                        np.testing.assert_allclose(actual, expected, rtol=1e-9, atol=1e-13)
+            for tout in (40.0, 30.0):
+                actual = evaluate(family + suffix, [beta, 40.0, tout, 45.0, *extra])
+                assert not actual.any()
+
     # No Doppler shift: a narrow line integrates to Cf/2 of its input norm.
-    for family, suffix in (("windem", "*gaussian"), ("windline", "")):
+    for family, suffix in (("wem", "*gaussian"), ("wline", "")):
         extra = [6.7, 0.025, 1.0] if suffix else [6.7, 1.0]
-        flux = evaluate(family + "los" + suffix, [0.0, 0.3, 0.5, 45.0] + extra)
+        flux = evaluate(family + "los_Cf" + suffix, [0.0, 0.3, 0.5, 45.0] + extra)
         np.testing.assert_allclose(flux.sum(), 0.15, rtol=1e-7)
 
     # Reusing a model must not leave an earlier nonzero spectrum at Cf=0.
-    for expression, extra in (("windemlos*powerlaw", [2.0, 1.0]),
-                              ("windlinelos", [6.7, 1.0])):
+    for expression, extra in (("wemlos_Cf*powerlaw", [2.0, 1.0]),
+                              ("wlinelos_Cf", [6.7, 1.0])):
         AllModels.clear()
         model = Model(expression)
         model.setPars(*([0.25, 0.3, 0.5, 45.0] + extra))

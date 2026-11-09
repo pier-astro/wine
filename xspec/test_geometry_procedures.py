@@ -46,9 +46,9 @@ def main():
 
         Xset.chatter = 0
         Xset.allowPrompting = False
-        AllModels.lmod("wine", str(root / "xspec"))
+        AllModels.lmod("redwine", str(root / "xspec"))
         AllData.dummyrsp(.5, 12., 120, "lin", .5, 11.5/120)
-        model = Model("powerlaw+windemlos*gaussian+windemlos*gaussian")
+        model = Model("powerlaw+wemlos_Cf*gaussian+wemlos_Cf*gaussian")
         model.setPars(2., .01, .25, .4396926207859083, .242050121690, 35.,
                       6.7, .025, .005, .25, .4396926207859083, .242050121690,
                       35., 6.7, .025, .0025)
@@ -69,7 +69,7 @@ def main():
             stream.write("\nenergies 0.1 30 2000 log\n")
         # Fixed off-wind geometry permits an exact native view->incl transform.
         AllModels.clear()
-        off = Model("powerlaw+windemoff*gaussian")
+        off = Model("powerlaw+wemoff_Cf*gaussian")
         hole = (1-np.cos(np.deg2rad(20.)))/(1-.4396926207859083)
         off.setPars(2., .01, .25, .4396926207859083, hole, .5, 0,
                     6.7, .025, .0075)
@@ -88,7 +88,7 @@ def main():
         AllData(f"2:2 {work / 'toy.fak'}")
         AllData(2).response = str(response)
         AllModels.clear()
-        named = Model("powerlaw+windemlos*gaussian+windemlos*gaussian", "named", 1)
+        named = Model("powerlaw+wemlos_Cf*gaussian+wemlos_Cf*gaussian", "named", 1)
         named.setPars(2., .01, .25, .4396926207859083, .242050121690, 35.,
                       6.7, .025, .005, .25, .4396926207859083, .242050121690,
                       35., 6.7, .025, .0025)
@@ -104,7 +104,7 @@ def main():
         # this disposable native process and its internal worker.
         script = r'''
 query no
-lmod wine @ROOT@/xspec
+lmod redwine @ROOT@/xspec
 @@WORK@/reference.xcm
 source @ROOT@/procedures/wind_geometry.tcl
 if {[catch {
@@ -122,7 +122,7 @@ if {[catch {
     set sigma [coverror {$p(4)}]
     if {abs($sigma-[dict get $geometry uncertainty Cf])>1e-6} {_wind_fail "Covariance Cf mismatch"}
     proc ::tcl::mathfunc::windtin {cf skew incl} {
-        return [dict get [_wind_angles [dict create kind los] [dict create Cf $cf skew $skew incl $incl]] tin]
+        return [dict get [_wind_angles [dict create system cf kind los] [dict create Cf $cf skew $skew incl $incl]] tin]
     }
     set sigma [coverror {windtin($p(4),$p(5),$p(6))}]
     if {abs($sigma-[dict get $geometry uncertainty tin])>1e-4*max(1.0,$sigma)} {_wind_fail "Covariance angular cross-term mismatch"}
@@ -230,6 +230,39 @@ if {[catch {
     if {![catch {winderror 2 tin} rejected] || ![string match {*fixed*full-coverage*} $rejected]} {
         _wind_fail "Frozen full-coverage opening angles must be reported as fixed"
     }
+    model clear
+    model powerlaw+wlinelos & 2 & 1 & 0.25 & 20 & 60 & 0.375 & 6.7 & 1
+    windgeom 2
+    set angleGeometry $::xspec_tclout
+    if {abs([dict get $angleGeometry incl]-35)>1e-8} {_wind_fail "Incorrect angular inclination"}
+    freeze 4
+    set angleContext [_wind_context 2 [_wind_options]]
+    if {![catch {_wind_constrain $angleContext 30 60} rejected options] ||
+        [dict get $options -errorcode] ne {WIND EXCLUDED}} {
+        _wind_fail "Angular scan must respect a frozen inner angle"
+    }
+    _wind_single_constraint $angleContext incl 40
+    set constrained [_wind_angles $angleContext]
+    if {abs([dict get $constrained incl]-40)>1e-8} {_wind_fail "Incorrect angular inclination link"}
+    newpar 5 70
+    if {abs([dict get [_wind_angles $angleContext] incl]-40)>1e-8} {
+        _wind_fail "Physical inclination drifted when the outer angle changed"
+    }
+    @@WORK@/reference.xcm
+    model powerlaw+wemlos*gaussian & 2 & 0.01 & 0.25 & 20 & 60 & 0.375 & 6.7 & 0.025 & 0.0075
+    freeze 1 3 4 5 7 8 9
+    fit
+    winderror 2 incl delta 1.0
+    set angleLimits $::xspec_tclout
+    if {[dict get $angleLimits lower]>=35 || [dict get $angleLimits upper]<=35} {
+        _wind_fail "Invalid direct-angle inclination limits"
+    }
+    thaw 5
+    windsteppar 2 tin 20 30 1 tout 10 60 1
+    set angleScan $::xspec_tclout
+    set states {}
+    foreach row [dict get $angleScan rows] {lappend states [dict get $row status]}
+    if {$states ne {excluded excluded ok excluded}} {_wind_fail "Unexpected direct-angle scan states: $states"}
 } message options]} {
     puts "TEST FAILED: $message"
     puts [dict get $options -errorinfo]

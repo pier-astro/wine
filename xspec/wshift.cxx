@@ -1,3 +1,4 @@
+#include "redwine_xspec.h"
 #include <xsTypes.h>
 #include <XSUtil/Numerics/LinearInterp.h>
 #include <XSUtil/Numerics/Numerics.h>
@@ -7,13 +8,13 @@
 #include <string>
 
 // Convolution models for velocity-shifted absorption
-// Usage: wind*mtable{table.fits}*powerlaw  (velocity only)
-//        zwind*mtable{table.fits}*powerlaw (velocity + redshift)
+// Usage: wshift*mtable{table.fits}*powerlaw  (velocity only)
+//        zwshift*mtable{table.fits}*powerlaw (velocity + redshift)
 
 static void warnFiniteGrid(const char* modelName) {
     static std::set<std::string> warnedModels;
     if (warnedModels.insert(modelName).second) {
-        FunctionUtility::xsWrite("\n\t*** WINE " + std::string(modelName) +
+        FunctionUtility::xsWrite("\n\t*** RED-WINE " + std::string(modelName) +
             " ENERGY-GRID NOTICE ***\n\tShifts use only the input spectrum "
             "evaluated by XSPEC. Missing input energies can produce artificial "
             "zeros near a shifted grid boundary. Use `energies extend low ...` "
@@ -78,40 +79,38 @@ static void applyVelocityShift(const RealArray& energy, RealArray& flux, Real do
     }
 }
 
-extern "C" void wind(const RealArray& energy, const RealArray& params,
+extern "C" void wshift(const RealArray& energy, const RealArray& params,
                      int spectrum, RealArray& flux, RealArray& fluxErr,
                      const std::string& init) {
-    const Real vout = params[0];
-    const Real beta = vout;
+    const Real beta = redwine::boundedParameter(params[0], -0.99, 0.99, "vout", spectrum);
     // Positive outflow velocity moves rest-frame features to higher energy.
     const Real doppler = std::sqrt((1.0 + beta) / (1.0 - beta));
-    applyVelocityShift(energy, flux, doppler, "wind", fluxErr);
+    applyVelocityShift(energy, flux, doppler, "wshift", fluxErr);
 }
 
-extern "C" void zwind(const RealArray& energy, const RealArray& params,
+extern "C" void zwshift(const RealArray& energy, const RealArray& params,
                       int spectrum, RealArray& flux, RealArray& fluxErr,
                       const std::string& init) {
-    const Real vout = params[0];
     const Real z = params[1];
-    const Real beta = vout;
+    const Real beta = redwine::boundedParameter(params[0], -0.99, 0.99, "vout", spectrum);
     // Cosmological redshift opposes the positive-velocity blueshift.
     const Real doppler = std::sqrt((1.0 + beta) / (1.0 - beta)) / (1.0 + z);
-    applyVelocityShift(energy, flux, doppler, "zwind", fluxErr);
+    applyVelocityShift(energy, flux, doppler, "zwshift", fluxErr);
 }
 
-extern "C" void awind(const RealArray& energy, const RealArray& params,
+extern "C" void awshift(const RealArray& energy, const RealArray& params,
                       int spectrum, RealArray& flux, RealArray& fluxErr,
                       const std::string& init) {
-    const Real beta = params[0];
+    const Real beta = redwine::boundedParameter(params[0], -0.99, 0.99, "vout", spectrum);
     const Real doppler = std::sqrt((1.0 + beta) / (1.0 - beta));
-    applyVelocityShift(energy, flux, doppler, "awind", fluxErr, true);
+    applyVelocityShift(energy, flux, doppler, "awshift", fluxErr, true);
 }
 
-extern "C" void azwind(const RealArray& energy, const RealArray& params,
+extern "C" void azwshift(const RealArray& energy, const RealArray& params,
                        int spectrum, RealArray& flux, RealArray& fluxErr,
                        const std::string& init) {
-    const Real beta = params[0];
+    const Real beta = redwine::boundedParameter(params[0], -0.99, 0.99, "vout", spectrum);
     const Real zfactor = 1.0 / (1.0 + params[1]);
     const Real doppler = std::sqrt((1.0 + beta) / (1.0 - beta)) * zfactor;
-    applyVelocityShift(energy, flux, doppler, "azwind", fluxErr, true, zfactor);
+    applyVelocityShift(energy, flux, doppler, "azwshift", fluxErr, true, zfactor);
 }

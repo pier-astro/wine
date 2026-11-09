@@ -35,13 +35,13 @@ def evaluate_band(model, grid, first_bin):
 def main():
     """Exercise blueshift, net redshift, and angular emission broadening."""
     Xset.chatter = 0
-    AllModels.lmod("wine", str(PACKAGE_DIR))
+    AllModels.lmod("redwine", str(PACKAGE_DIR))
     cases = (
-        ("(wind*constant)*powerlaw", (0.3, 0.5, 2.0, 1.0)),
-        ("(zwind*constant)*powerlaw", (0.3, 1.0, 0.5, 2.0, 1.0)),
-        ("awind*powerlaw", (0.3, 2.0, 1.0)),
-        ("azwind*powerlaw", (0.3, 1.0, 2.0, 1.0)),
-        ("windemlos*powerlaw", (0.3, 0.3, 0.5, 45.0, 2.0, 1.0)),
+        ("(wshift*constant)*powerlaw", (0.3, 0.5, 2.0, 1.0)),
+        ("(zwshift*constant)*powerlaw", (0.3, 1.0, 0.5, 2.0, 1.0)),
+        ("awshift*powerlaw", (0.3, 2.0, 1.0)),
+        ("azwshift*powerlaw", (0.3, 1.0, 2.0, 1.0)),
+        ("wemlos_Cf*powerlaw", (0.3, 0.3, 0.5, 45.0, 2.0, 1.0)),
     )
 
     for expression, parameters in cases:
@@ -57,13 +57,27 @@ def main():
 
         # Away from the missing input boundary, constant transmission stays
         # exactly 0.5; integral of E^-2 in each bin is 1/E_low - 1/E_high.
-        if expression.startswith("(wind") or expression.startswith("(zwind"):
+        if expression.startswith("(wshift") or expression.startswith("(zwshift"):
             edges = np.geomspace(1.0, 10.0, 1001)
             expected = 0.5 * (1.0 / edges[:-1] - 1.0 / edges[1:])
             np.testing.assert_allclose(extended, expected, rtol=1e-9, atol=0.0)
 
         relative_change = np.max(np.abs(extended / wider - 1.0))
         print(f"{expression}: extension change {relative_change:.2g}")
+
+    AllModels.clear()
+    AllModels.setEnergies("0.1 30 6000 log")
+    for expression in ("awshift*gaussian", "azwshift*gaussian"):
+        model = Model(expression)
+        model(1).values = [-0.25, 0.01, -0.99, -0.99, 0.99, 0.99]
+        if expression.startswith("azwshift"):
+            model(2).values = 0.0
+        edges = np.asarray(model.energies(0))
+        centers = np.sqrt(edges[:-1] * edges[1:])
+        flux = np.asarray(model.values(0))
+        centroid = np.average(centers, weights=flux)
+        np.testing.assert_allclose(centroid, 6.5 * np.sqrt(0.75 / 1.25), rtol=1e-5)
+        AllModels.clear()
 
     print("Energy-coverage checks passed")
 

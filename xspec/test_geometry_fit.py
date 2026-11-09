@@ -13,15 +13,15 @@ import numpy as np
 from xspec import AllData, AllModels, FakeitSettings, Fit, Model, Xset
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from wine import Geometry
+from redwine import Geometry
 
 
 def main():
     Xset.chatter = 0
     Xset.allowPrompting = False
-    AllModels.lmod("wine", str(Path(__file__).resolve().parent))
+    AllModels.lmod("redwine", str(Path(__file__).resolve().parent))
     AllData.dummyrsp(0.5, 12.0, 120, "lin", 0.5, (12.0 - 0.5) / 120)
-    model = Model("powerlaw+windemlos*gaussian")
+    model = Model("powerlaw+wemlos_Cf*gaussian")
     model.setPars(2.0, 0.01, 0.25, 0.4, 0.65, 35.0, 6.7, 0.025, 0.005)
     AllModels.setEnergies("0.1 30 2000 log")
     AllData.fakeit(1, FakeitSettings(exposure=100000), applyStats=False, noWrite=True)

@@ -7,8 +7,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from wine.ogip import read_table_model
-from wine import SpectralGrid
+from redwine.ogip import read_table_model
+from redwine import SpectralGrid
 
 
 def write_test_table(path):

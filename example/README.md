@@ -30,7 +30,7 @@ separately and are not redistributed through Git.
 In XSPEC, working from this folder:
 
 ```tcl
-lmod wine ../xspec
+lmod redwine ../xspec
 data simulated.grp
 @model.xcm
 energies 0.01 40 6000 log

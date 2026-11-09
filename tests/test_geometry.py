@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from scipy.optimize import brentq
 
-from wine import Geometry
+from redwine import Geometry
 
 
 class GeometryTest(unittest.TestCase):

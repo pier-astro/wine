@@ -12,7 +12,7 @@ import numpy as np
 from xspec import AllData, AllModels, FakeitSettings, Fit, Model, Xset
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from wine import Geometry
+from redwine import Geometry
 
 
 def constrain(model, tin, tout):
@@ -52,9 +52,9 @@ def constrain(model, tin, tout):
 def main():
     Xset.chatter = 0
     Xset.allowPrompting = False
-    AllModels.lmod("wine", str(Path(__file__).resolve().parent))
+    AllModels.lmod("redwine", str(Path(__file__).resolve().parent))
     AllData.dummyrsp(.5, 12., 120, "lin", .5, 11.5/120)
-    model = Model("powerlaw+windemlos*gaussian+windemlos*gaussian")
+    model = Model("powerlaw+wemlos_Cf*gaussian+wemlos_Cf*gaussian")
     model.setPars(2., .01, .25, .4396926207859083, .242050121690,
                   35., 6.7, .025, .005,
                   .25, .4396926207859083, .242050121690,

@@ -1,16 +1,16 @@
 # Python models and spectral inputs
 
-The Python package applies WINE's kinematic and geometric calculations to rest-frame spectra prepared elsewhere. `src/wine/kernels.py` contains the analytical line profile and convolution; `src/wine/models.py` combines those calculations with absorption or emission spectra; `src/wine/grid.py` interpolates the supplied spectra. The package does not call an ionisation engine.
+The Python package applies RED-WINE's kinematic and geometric calculations to rest-frame spectra prepared elsewhere. `src/redwine/kernels.py` contains the analytical line profile and convolution; `src/redwine/models.py` combines those calculations with absorption or emission spectra; `src/redwine/grid.py` interpolates the supplied spectra. The package does not call an ionisation engine.
 
 ## Spectral grid contract
 
-`wine.SpectralGrid` accepts increasing one-dimensional axes `energy` (keV), `logxi`, `vturb` (km/s), and `log_nh = log10(N_H / cm^-2)`. Each spectral array has shape `(n_logxi, n_vturb, n_log_nh, n_energy)`. Optical-depth arrays are dimensionless and nonnegative. Emission arrays contain nonnegative **bin-integrated** photon spectra; their physical normalisation is supplied by the grid producer, and `emission_slab(..., norm=...)` scales it.
+`redwine.SpectralGrid` accepts increasing one-dimensional axes `energy` (keV), `logxi`, `vturb` (km/s), and `log_nh = log10(N_H / cm^-2)`. Each spectral array has shape `(n_logxi, n_vturb, n_log_nh, n_energy)`. Optical-depth arrays are dimensionless and nonnegative. Emission arrays contain nonnegative **bin-integrated** photon spectra; their physical normalisation is supplied by the grid producer, and `emission_slab(..., norm=...)` scales it.
 
 The supported dictionary keys are set by the caller. The slab functions use optical-depth modes `absorption`, `scattering`, and `total`, and emission modes `total`, `lines`, and `continuum`. Only modes present in the grid can be evaluated.
 
 ```python
 import numpy as np
-from wine import SpectralGrid, absorption_slab
+from redwine import SpectralGrid, absorption_slab
 
 energy = np.geomspace(0.3, 20.0, 1000)  # rest-frame bin centres, keV
 tau = np.full((2, 1, 2, energy.size), 0.1)
@@ -42,9 +42,9 @@ rest_frame_tau = grid.optical_depth(logxi=3.5, vturb=100.0, log_nh=22.5)
 rest_frame_lines = grid.emitted(logxi=3.5, vturb=100.0, log_nh=22.5, mode="lines")
 ```
 
-These file names match the bundled `iongrid` recipe but are placeholders; no production tables ship with WINE. Optical-depth tables may be exponential tables containing optical depth or multiplicative tables containing transmission. Emission tables must be additive and contain bin-integrated photons. All supplied tables must have identical energy bins, parameter axes, and parameter-coordinate interpolation methods. Recognised parameter names are `logxi`, `vturb`, and `lognH`/`log_nh` (case-insensitive). Supply each omitted singleton axis through `fixed_parameters`; omit `fixed_parameters` if all three axes vary in the tables. Reading FITS files requires the `fits` extra.
+These file names match the bundled `iongrid` recipe but are placeholders; no production tables ship with RED-WINE. Optical-depth tables may be exponential tables containing optical depth or multiplicative tables containing transmission. Emission tables must be additive and contain bin-integrated photons. All supplied tables must have identical energy bins, parameter axes, and parameter-coordinate interpolation methods. Recognised parameter names are `logxi`, `vturb`, and `lognH`/`log_nh` (case-insensitive). Supply each omitted singleton axis through `fixed_parameters`; omit `fixed_parameters` if all three axes vary in the tables. Reading FITS files requires the `fits` extra.
 
-The general `wine.ogip.read_table_model(path)` reader can also evaluate one OGIP table directly. It supports regular interpolation grids and rejects additional-parameter spectra and XSPEC filter expressions.
+The general `redwine.ogip.read_table_model(path)` reader can also evaluate one OGIP table directly. It supports regular interpolation grids and rejects additional-parameter spectra and XSPEC filter expressions.
 
 ## Interpolation
 
@@ -62,7 +62,7 @@ Parameter coordinates follow OGIP `METHOD=0` (linear) or `METHOD=1` (logarithmic
 `E_obs` is an increasing array of energy centres in keV. Public `Geometry`
 angles and XSPEC inclination parameters are in **degrees**; conversion to
 radians occurs at the numerical-kernel boundary. The low-level functions in
-`wine.kernels` still take radians. Positive absorption `beta=v/c` denotes motion
+`redwine.kernels` still take radians. Positive absorption `beta=v/c` denotes motion
 toward the observer and blueshifts features. Absorption `C_f` lies between zero
 and one and is distinct from the wind's hemispheric `Geometry.Cf`. The slab
 functions clamp grid coordinates to supplied table ranges; validate the
@@ -71,7 +71,7 @@ scientific suitability of any clamped evaluation in your analysis.
 ## Physical geometry
 
 ```python
-from wine import Geometry
+from redwine import Geometry
 
 explicit = Geometry.angles(incl=45, tin=30, tout=60)
 generic = Geometry.free(Cf=0.3, hole=0.5, incl=45)
@@ -102,8 +102,8 @@ their correlations when transformed; a converted native-coordinate scan is
 not generally a profile of derived axes that also depend on refitted nuisance
 parameters.
 
-For emission, `norm` is a simple multiplicative factor. WINE does not infer a source luminosity, distance, or shell covering factor from the FITS header. The returned flux density inherits the grid producer's photon normalisation divided by energy-bin width and multiplied by `norm`. For a consistent joint model, emission and absorption spectra must use compatible physical conditions and conventions.
+For emission, `norm` is a simple multiplicative factor. RED-WINE does not infer a source luminosity, distance, or shell covering factor from the FITS header. The returned flux density inherits the grid producer's photon normalisation divided by energy-bin width and multiplied by `norm`. For a consistent joint model, emission and absorption spectra must use compatible physical conditions and conventions.
 
 ## Current limits
 
-WINE 2.0 currently evaluates individual slabs or shells. It does not calculate ionisation balance, attenuation of one shell by another, or a self-consistent multi-shell radiation field. The approximate Compton-thin focus in the README is a modelling scope, not a hard-coded column-density cut. The supplied grid's energy coverage and resolution must support the requested Doppler shifts and observer band.
+RED-WINE 2.0 currently evaluates individual slabs or shells. It does not calculate ionisation balance, attenuation of one shell by another, or a self-consistent multi-shell radiation field. The approximate Compton-thin focus in the README is a modelling scope, not a hard-coded column-density cut. The supplied grid's energy coverage and resolution must support the requested Doppler shifts and observer band.

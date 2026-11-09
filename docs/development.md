@@ -2,7 +2,7 @@
 
 The repository has two independent user interfaces:
 
-- `src/wine/`: importable Python package with `geometry.py` (physical geometry and coordinate conversion), `kernels.py` (analytical profiles and convolution), `models.py` (observer-frame slab functions), `grid.py` (engine-independent spectral interpolation), and `ogip.py` (OGIP FITS reader).
+- `src/redwine/`: importable Python package with `geometry.py` (physical geometry and coordinate conversion), `kernels.py` (analytical profiles and convolution), `models.py` (observer-frame slab functions), `grid.py` (engine-independent spectral interpolation), and `ogip.py` (OGIP FITS reader).
 - `xspec/`: C++ local XSPEC functions registered in `lmodel.dat`. Python and XSPEC can read the same precomputed spectra, but their default interpolation of spectral values differs; see the [Python guide](python.md#interpolation).
 
 `tests/` checks Python grids, slab evaluation, and OGIP table reading. `xspec/test_geometry_models.py` checks that the constrained geometry wrappers agree with the base XSPEC models. Run the Python tests from the repository root:
@@ -50,8 +50,8 @@ Tcl procedure or a session/export test.
 report and angular scan, with a file-backed unit-area diagonal RMF. It verifies
 identity links, named models/two groups, caller-state preservation, simulated
 fit failures versus geometric exclusions, and native/structured FITS export.
-This integration check requires xspeclab's checkout beside WINE for the export
-test; the WINE procedures themselves do not depend on xspeclab.
+This integration check requires xspeclab's checkout beside RED-WINE for the export
+test; the RED-WINE procedures themselves do not depend on xspeclab.
 The same check now tests derived LoS opening-angle profiles, native inclination
 errors, fixed-Cf constraints, monotonic fixed-geometry transformations, and
 off-wind inclination with fixed geometry. Local covariance uncertainties agree
@@ -59,13 +59,12 @@ with xspeclab's independent numerical `coverror` propagation, including an
 angular expression with cross terms. `tclsh procedures/test_wind_geometry.tcl`
 checks analytic geometry derivatives against finite differences for generic,
 LoS, and both off-wind sectors, plus covariance cross terms and profile-boundary
-callbacks. The old `test_wine_profile.tcl` remains a regression check for search
-tolerance, diagnostics, and layout.
+callbacks. The shared profile search is checked by `test_wind_geometry.tcl`.
 
-`xspec/wine_geometry.h` shares the geometry conversion between all six emission
+`xspec/redwine_geometry.h` shares the geometry conversion between all six emission
 entry points. The Python geometry tests use an independent bracketed root as
 a reference for the analytic quadratic. Accepted XSPEC coordinates use bounded
-metadata; `wine_xspec.h` provides a warned one-sided continuation for finite
+metadata; `redwine_xspec.h` provides a warned one-sided continuation for finite
 out-of-bounds derivative probes. This continuation is separate from Python's
 strict constructor validation and does not make out-of-range links physical.
 
@@ -85,4 +84,4 @@ Earlier expected-count recovery and timing checks remain historical validation,
 not extra user-facing scripts. These examples do not certify global convergence
 or scientific uncertainty calibration.
 
-WINE receives rest-frame spectra as arrays or OGIP tables and does not import or execute CLOUDY or XSTAR. Spectral production workflows belong in a separate tool. This separation lets a user supply custom spectra while keeping wind kinematics and geometry in WINE. Check units, energy bins, parameter definitions, and any radiative-transfer assumptions before combining files from different producers.
+RED-WINE receives rest-frame spectra as arrays or OGIP tables and does not import or execute CLOUDY or XSTAR. Spectral production workflows belong in a separate tool. This separation lets a user supply custom spectra while keeping wind kinematics and geometry in RED-WINE. Check units, energy bins, parameter definitions, and any radiative-transfer assumptions before combining files from different producers.

@@ -8,6 +8,8 @@ if [[ -z "${HEADAS:-}" ]] || ! command -v initpackage >/dev/null || ! command -v
 fi
 
 ./clean.sh
-initpackage wine lmodel.dat .
+# XSPEC resolves prefixes in registration order. Keep angular models before
+# the corresponding _Cf entries in lmodel.dat.
+initpackage redwine lmodel.dat .
 hmake
-echo "Built $PWD/libwine.dylib (or the platform's shared-library suffix)."
+echo "Built $PWD/libredwine.dylib (or the platform's shared-library suffix)."

@@ -7,7 +7,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from wine import Geometry, SpectralGrid, absorption_slab, emission_slab
+from redwine import Geometry, SpectralGrid, absorption_slab, emission_slab
 from test_ogip_table import write_test_table
 
 

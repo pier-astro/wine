@@ -8,7 +8,7 @@ xset NEIAPECROOT  3.0.4
 xset SPEXROOT  3.08
 xset TBABSVERSION  2.0
 systematic 0
-model  TBabs((wind*mtable{habs.mmod})(wind*mtable{habs.mmod})zpowerlw + windemlos*atable{hem.amod} + windemlos*atable{hem.amod})
+model  TBabs((wshift*mtable{habs.mmod})(wshift*mtable{habs.mmod})zpowerlw + wemlos_Cf*atable{hem.amod} + wemlos_Cf*atable{hem.amod})
           0.197     -0.001          0          0     100000      1e+06
             0.2       0.01          0          0       0.99       0.99
             4.9      0.025          3          3          7          7

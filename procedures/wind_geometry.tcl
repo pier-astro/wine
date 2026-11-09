@@ -1,4 +1,4 @@
-# Physical geometry reporting and isolated angular scans for current WINE.
+# Physical geometry reporting and isolated angular scans for current RED-WINE.
 # Public selectors are component numbers, with optional model NAME/group N.
 set ::_wind_source [file normalize [info script]]
 if {[file type $::_wind_source] eq "link"} {
@@ -47,16 +47,15 @@ proc _wind_context {component options} {
     set prefix [dict get $options model]
     if {$prefix ne ""} {append prefix :}
     lassign [_wind_out compinfo ${prefix}$component [dict get $options group]] name first count
-    if {$name ni {windem windemlos windemoff windline windlinelos windlineoff}} {
-        _wind_fail "Component $component is not a WINE emission component: $name"
+    set name [string tolower $name]
+    set coordinates [dict create         wem {generic angles tin tout incl} wline {generic angles tin tout incl}         wemlos {los angles tin tout uincl} wlinelos {los angles tin tout uincl}         wemoff {off angles tin tout uview} wlineoff {off angles tin tout uview}         wem_cf {generic cf Cf hole incl} wline_cf {generic cf Cf hole incl}         wemlos_cf {los cf Cf skew incl} wlinelos_cf {los cf Cf skew incl}         wemoff_cf {off cf Cf hole view} wlineoff_cf {off cf Cf hole view}]
+    if {![dict exists $coordinates $name]} {
+        _wind_fail "Component $component is not a RED-WINE emission component: $name"
     }
-    set kind generic
-    if {[string match *los $name]} {set kind los}
-    if {[string match *off $name]} {set kind off}
-    set shape [expr {$kind eq "los" ? "skew" : "hole"}]
-    set view [expr {$kind eq "off" ? "view" : "incl"}]
-    set ctx [dict create component $component options $options kind $kind name $name]
-    foreach key [list Cf $shape $view] offset {1 2 3} {
+    lassign [dict get $coordinates $name] kind system firstKey secondKey view
+    set keys [list $firstKey $secondKey $view]
+    set ctx [dict create component $component options $options kind $kind system $system name $name keys $keys]
+    foreach key $keys offset {1 2 3} {
         dict set ctx $key [_wind_parameter ${prefix}[expr {$first+$offset}] $key]
     }
     if {$kind eq "off"} {
@@ -65,7 +64,7 @@ proc _wind_context {component options} {
         dict set ctx region [dict get $region value]
     }
     set masters {}
-    foreach key [list Cf $shape $view] {lappend masters [dict get $ctx $key id]}
+    foreach key $keys {lappend masters [dict get $ctx $key id]}
     if {[llength [lsort -unique $masters]] != 3} {_wind_fail "Geometry coordinates must have distinct master parameters"}
     return $ctx
 }
@@ -73,9 +72,25 @@ proc _wind_context {component options} {
 # Forward physical geometry. Angles are degrees; Cf is hemispheric coverage.
 proc _wind_angles {ctx {values {}}} {
     if {$values eq ""} {
-        foreach key {Cf hole skew incl view} {
+        foreach key [dict get $ctx keys] {
             if {[dict exists $ctx $key]} {dict set values $key [lindex [_wind_out param [dict get $ctx $key id]] 0]}
         }
+    }
+    if {[dict get $ctx system] eq "angles"} {
+        set tin [dict get $values tin]
+        set tout [dict get $values tout]
+        if {$tin > $tout} {_wind_fail "Inverted RED-WINE geometry: tin=$tin exceeds tout=$tout"}
+        set rad [expr {acos(-1.0)/180.0}]
+        set cover [expr {cos($tin*$rad)-cos($tout*$rad)}]
+        switch [dict get $ctx kind] {
+            generic {set incl [dict get $values incl]}
+            los {set incl [expr {$tin+[dict get $values uincl]*($tout-$tin)}]}
+            off {
+                set u [dict get $values uview]
+                set incl [expr {[dict get $ctx region]==0 ? (1.0-$u)*$tin : $tout+$u*(90.0-$tout)}]
+            }
+        }
+        return [dict create Cf $cover tin $tin tout $tout incl $incl]
     }
     set cover [dict get $values Cf]
     set kind [dict get $ctx kind]
@@ -193,6 +208,38 @@ proc _wind_covariance_error {gradient covariance} {
 
 # Analytic angular derivatives; missing/singular gradients are not zero errors.
 proc _wind_gradient {ctx geometry quantity} {
+    if {[dict get $ctx system] eq "angles"} {
+        set tin [dict get $geometry tin]
+        set tout [dict get $geometry tout]
+        set rad [expr {acos(-1.0)/180.0}]
+        set key [lindex [dict get $ctx keys] 2]
+        switch $quantity {
+            Cf {set derivatives [list [expr {-$rad*sin($tin*$rad)}] [expr {$rad*sin($tout*$rad)}] 0.0]}
+            tin {set derivatives {1.0 0.0 0.0}}
+            tout {set derivatives {0.0 1.0 0.0}}
+            incl {
+                set u [dict get $ctx $key value]
+                switch $key {
+                    incl {set derivatives {0.0 0.0 1.0}}
+                    uincl {set derivatives [list [expr {1.0-$u}] $u [expr {$tout-$tin}]]}
+                    uview {
+                        if {[dict get $ctx region]==0} {
+                            set derivatives [list [expr {1.0-$u}] 0.0 [expr {-$tin}]]
+                        } else {
+                            set derivatives [list 0.0 [expr {1.0-$u}] [expr {90.0-$tout}]]
+                        }
+                    }
+                }
+            }
+        }
+        set gradient {}
+        foreach key [dict get $ctx keys] derivative $derivatives {
+            if {[dict get $ctx $key free] && $derivative != 0} {
+                dict set gradient [dict get $ctx $key id] $derivative
+            }
+        }
+        return $gradient
+    }
     set cover [dict get $geometry Cf]
     set kind [dict get $ctx kind]
     set shape [expr {$kind eq "los" ? "skew" : "hole"}]
@@ -249,6 +296,20 @@ proc _wind_fix {entry value} {
 
 proc _wind_constrain {ctx tin tout} {
     if {$tin > $tout} {return -code error -errorcode {WIND EXCLUDED} "tin exceeds tout"}
+    if {[dict get $ctx system] eq "angles"} {
+        foreach key {tin tout} value [list $tin $tout] {
+            set entry [dict get $ctx $key]
+            if {![dict get $entry free] && abs($value-[dict get $entry value])>1e-8} {
+                return -code error -errorcode {WIND EXCLUDED} "$key is frozen"
+            }
+            lassign [dict get $entry spec] current delta hardMin softMin softMax hardMax
+            if {$value < $hardMin || $value > $hardMax} {
+                return -code error -errorcode {WIND EXCLUDED} "$key is outside its hard bounds"
+            }
+            if {[dict get $entry free]} {_wind_fix $entry $value}
+        }
+        return
+    }
     set pi [expr {acos(-1.0)}]
     set r [expr {$tin == 90 ? 0.0 : cos($tin*$pi/180.0)}]
     set x [expr {$tout == 90 ? 0.0 : cos($tout*$pi/180.0)}]
@@ -410,6 +471,35 @@ proc _wind_range {entry low high} {
 # All other originally free coordinates remain nuisance parameters.
 proc _wind_single_constraint {ctx quantity angle} {
     set kind [dict get $ctx kind]
+    if {[dict get $ctx system] eq "angles"} {
+        if {$quantity ne "incl"} {
+            _wind_fix [dict get $ctx $quantity] $angle
+            set other [expr {$quantity eq "tin" ? "tout" : "tin"}]
+            set entry [dict get $ctx $other]
+            if {$quantity eq "tin"} {
+                _wind_range $entry $angle 90.0
+            } else {
+                _wind_range $entry 0.0 $angle
+            }
+            return
+        }
+        if {$kind eq "generic"} {_wind_fix [dict get $ctx incl] $angle; return}
+        set inner [dict get $ctx tin id]
+        set outer [dict get $ctx tout id]
+        set target [format %.17e $angle]
+        if {$kind eq "los"} {
+            _wind_range [dict get $ctx tin] 0.0 $angle
+            _wind_range [dict get $ctx tout] $angle 90.0
+            newpar [dict get $ctx uincl id] = "($target-$inner)/max(1.0e-12,($outer-$inner))"
+        } elseif {[dict get $ctx region]==0} {
+            _wind_range [dict get $ctx tin] $angle 90.0
+            newpar [dict get $ctx uview id] = "1.0-$target/max(1.0e-12,$inner)"
+        } else {
+            _wind_range [dict get $ctx tout] 0.0 $angle
+            newpar [dict get $ctx uview id] = "($target-$outer)/max(1.0e-12,(90.0-$outer))"
+        }
+        return
+    }
     if {$quantity eq "incl"} {
         if {$kind ne "off"} {_wind_fix [dict get $ctx incl] $angle; return}
         _wind_fail "Physical off-wind inclination profiling with free geometry is not supported yet"
@@ -504,8 +594,8 @@ proc _wind_profile_trial {profile angle} {
     set ctx [_wind_context [dict get $profile component] [dict get $profile options]]
     set quantity [dict get $profile quantity]
     _wind_single_constraint $ctx $quantity $angle
-    file delete -force $::_wine_profile_failed_trial
-    save all $::_wine_profile_failed_trial
+    file delete -force $::_redwine_profile_failed_trial
+    save all $::_redwine_profile_failed_trial
     fit
     set actual [_wind_angles $ctx]
     set pi [expr {acos(-1.0)}]
@@ -524,9 +614,9 @@ proc _wind_profile_trial {profile angle} {
 }
 
 proc _wind_error_worker {component options quantity delta toler directory} {
-    source [file join [file dirname $::_wind_source] wine_profile.tcl]
-    set ::_wine_profile_output_dir $directory
-    set ::_wine_profile_failed_trial [file join $directory failed-trial.xcm]
+    source [file join [file dirname $::_wind_source] redwine_profile.tcl]
+    set ::_redwine_profile_output_dir $directory
+    set ::_redwine_profile_failed_trial [file join $directory failed-trial.xcm]
     set failed [catch {
         set original [_wind_out stat]
         fit
@@ -534,29 +624,48 @@ proc _wind_error_worker {component options quantity delta toler directory} {
         set ctx [_wind_context $component $options]
         set geometry [_wind_angles $ctx]
         set center [dict get $geometry $quantity]
-        _wine_profile_check_improvement $center $statistic $original $toler
+        _redwine_profile_check_improvement $center $statistic $original $toler
         set baseline [_wind_snapshot [file join $directory baseline]]
         set low 1e-5
         set high [expr {90.0-1e-5}]
-        if {![dict get $ctx Cf free]} {
-            set cover [dict get $ctx Cf value]
-            if {$quantity eq "tin"} {set high [expr {min($high,acos($cover)*180.0/acos(-1.0))}]}
-            if {$quantity eq "tout"} {set low [expr {max($low,acos(1.0-$cover)*180.0/acos(-1.0))}]}
-        } elseif {[dict get $ctx kind] ne "los" && ![dict get $ctx hole free]} {
-            set boundary [expr {acos(1.0-[dict get $ctx hole value])*180.0/acos(-1.0)}]
-            if {$quantity eq "tin"} {set high [expr {min($high,$boundary)}]}
-            if {$quantity eq "tout"} {set low [expr {max($low,$boundary)}]}
-        }
-        if {[dict get $ctx kind] eq "los" && ![dict get $ctx incl free]} {
-            set inclination [dict get $ctx incl value]
-            if {$quantity eq "tin"} {set high [expr {min($high,$inclination)}]}
-            if {$quantity eq "tout"} {set low [expr {max($low,$inclination)}]}
+        if {[dict get $ctx system] eq "angles"} {
+            set kind [dict get $ctx kind]
+            if {$quantity eq "tin" && ![dict get $ctx tout free]} {
+                set high [expr {min($high,[dict get $geometry tout])}]
+            } elseif {$quantity eq "tout" && ![dict get $ctx tin free]} {
+                set low [expr {max($low,[dict get $geometry tin])}]
+            } elseif {$quantity eq "incl"} {
+                if {$kind eq "los"} {
+                    if {![dict get $ctx tin free]} {set low [dict get $geometry tin]}
+                    if {![dict get $ctx tout free]} {set high [dict get $geometry tout]}
+                } elseif {$kind eq "off"} {
+                    if {[dict get $ctx region]==0 && ![dict get $ctx tin free]} {set high [dict get $geometry tin]}
+                    if {[dict get $ctx region]==1 && ![dict get $ctx tout free]} {set low [dict get $geometry tout]}
+                }
+            }
+        } else {
+            if {![dict get $ctx Cf free]} {
+                set cover [dict get $ctx Cf value]
+                if {$quantity eq "tin"} {set high [expr {min($high,acos($cover)*180.0/acos(-1.0))}]}
+                if {$quantity eq "tout"} {set low [expr {max($low,acos(1.0-$cover)*180.0/acos(-1.0))}]}
+            } elseif {[dict get $ctx kind] ne "los" && ![dict get $ctx hole free]} {
+                set boundary [expr {acos(1.0-[dict get $ctx hole value])*180.0/acos(-1.0)}]
+                if {$quantity eq "tin"} {set high [expr {min($high,$boundary)}]}
+                if {$quantity eq "tout"} {set low [expr {max($low,$boundary)}]}
+            }
+            if {[dict get $ctx kind] eq "los" && ![dict get $ctx incl free]} {
+                set inclination [dict get $ctx incl value]
+                if {$quantity eq "tin"} {set high [expr {min($high,$inclination)}]}
+                if {$quantity eq "tout"} {set low [expr {max($low,$inclination)}]}
+            }
         }
         set profile [dict create component $component options $options quantity $quantity \
             snapshot $baseline directory $directory profile_bounds [list $low $high]]
         set points [list [list $center $statistic]]
         set nativeKey {}
-        if {$quantity eq "incl"} {
+        if {[dict get $ctx system] eq "angles"} {
+            if {$quantity eq "incl" && [dict get $ctx kind] eq "generic"} {set nativeKey incl}
+        } elseif {$quantity eq "incl"} {
             set nativeKey [expr {[dict get $ctx kind] eq "off" ? "view" : "incl"}]
         } elseif {[dict get $ctx kind] eq "los" && ![dict get $ctx Cf free] && ![dict get $ctx skew free]} {
             set nativeKey incl
@@ -565,7 +674,7 @@ proc _wind_error_worker {component options quantity delta toler directory} {
             set id [dict get $ctx $nativeKey id]
             if {![dict get $ctx $nativeKey free]} {_wind_fail "$nativeKey is fixed"}
             error $delta $id
-            _wine_profile_check_improvement $center [_wind_out stat] $statistic $toler
+            _redwine_profile_check_improvement $center [_wind_out stat] $statistic $toler
             lassign [_wind_out error $id] lower upper flags
             set result [dict create center $center lower $lower upper $upper flags $flags flag_format native]
             if {$quantity ne $nativeKey} {
@@ -573,7 +682,7 @@ proc _wind_error_worker {component options quantity delta toler directory} {
                 # geometry coordinates are fixed, not merely at their best fit.
                 dict set result native_limits [list $lower $upper]
                 set values {}
-                foreach key {Cf hole skew incl view} {
+                foreach key [dict get $ctx keys] {
                     if {[dict exists $ctx $key]} {dict set values $key [dict get $ctx $key value]}
                 }
                 foreach side {lower upper} value [list $lower $upper] {
@@ -585,8 +694,8 @@ proc _wind_error_worker {component options quantity delta toler directory} {
                 dict set result mapping monotonic-fixed-geometry
             }
         } else {
-            set lower [_wine_profile_side $profile $center $statistic $delta $toler -1 points _wind_profile_trial]
-            set upper [_wine_profile_side $profile $center $statistic $delta $toler 1 points _wind_profile_trial]
+            set lower [_redwine_profile_side $profile $center $statistic $delta $toler -1 points _wind_profile_trial]
+            set upper [_redwine_profile_side $profile $center $statistic $delta $toler 1 points _wind_profile_trial]
             set flags {}
             foreach test [list [expr {[lindex $lower 0] eq "boundary"}] [expr {[lindex $upper 0] eq "boundary"}] \
                 [expr {[lindex $lower 0] eq "unstable"}] [expr {[lindex $upper 0] eq "unstable"}]] {
@@ -607,7 +716,7 @@ proc _wind_error_worker {component options quantity delta toler directory} {
     if {$failed} {
         if {$message eq ""} {set message "XSPEC constrained fit failed; inspect worker.log"}
         set result [dict create status failed message $message code [dict get $details -errorcode]]
-        if {[lrange [dict get $details -errorcode] 0 1] eq {WINE BETTER_FIT}} {
+        if {[lrange [dict get $details -errorcode] 0 1] eq {RED-WINE BETTER_FIT}} {
             dict set result candidate [_wind_snapshot [file join $directory better-fit]]
         }
     }
@@ -631,24 +740,29 @@ proc winderror {component quantity args} {
     }
     set options [_wind_options model [dict get $settings model] group [dict get $settings group]]
     set ctx [_wind_context $component $options]
-    set shape [expr {[dict get $ctx kind] eq "los" ? "skew" : "hole"}]
-    if {$quantity ne "incl" && ![dict get $ctx Cf free] && [dict get $ctx Cf value]==1} {
-        _wind_fail "$quantity is fixed by the frozen full-coverage geometry"
-    }
-    if {$quantity ne "incl" && $shape eq "hole" && ![dict get $ctx hole free] &&
-        (($quantity eq "tin" && [dict get $ctx hole value]==0) ||
-         ($quantity eq "tout" && [dict get $ctx hole value]==1))} {_wind_fail "$quantity is fixed by the frozen cavity coordinate"}
-    if {$quantity ne "incl" && ![dict get $ctx Cf free] && ![dict get $ctx $shape free] &&
-        !([dict get $ctx kind] eq "los" && [dict get $ctx incl free])} {
-        _wind_fail "This profile requires at least one free coverage/shape coordinate; fixed geometry constraints are not released"
-    }
-    if {$quantity eq "incl" && [dict get $ctx kind] eq "off"} {
-        if {[dict get $ctx Cf free] || [dict get $ctx hole free]} {
-            _wind_fail "Off-wind inclination profiles require fixed Cf and hole in this version; limits on view alone are not physical inclination limits when geometry varies"
+    if {[dict get $ctx system] eq "angles"} {
+        set key [expr {$quantity eq "incl" ? [lindex [dict get $ctx keys] 2] : $quantity}]
+        if {![dict get $ctx $key free]} {_wind_fail "$key is fixed"}
+    } else {
+        set shape [expr {[dict get $ctx kind] eq "los" ? "skew" : "hole"}]
+        if {$quantity ne "incl" && ![dict get $ctx Cf free] && [dict get $ctx Cf value]==1} {
+            _wind_fail "$quantity is fixed by the frozen full-coverage geometry"
         }
-        set geometry [_wind_angles $ctx]
-        if {([dict get $ctx region]==0 && [dict get $geometry tin]==0) ||
-            ([dict get $ctx region]==1 && [dict get $geometry tout]==90)} {_wind_fail "The selected off-wind sector has fixed physical inclination"}
+        if {$quantity ne "incl" && $shape eq "hole" && ![dict get $ctx hole free] &&
+            (($quantity eq "tin" && [dict get $ctx hole value]==0) ||
+             ($quantity eq "tout" && [dict get $ctx hole value]==1))} {_wind_fail "$quantity is fixed by the frozen cavity coordinate"}
+        if {$quantity ne "incl" && ![dict get $ctx Cf free] && ![dict get $ctx $shape free] &&
+            !([dict get $ctx kind] eq "los" && [dict get $ctx incl free])} {
+            _wind_fail "This profile requires at least one free coverage/shape coordinate; fixed geometry constraints are not released"
+        }
+        if {$quantity eq "incl" && [dict get $ctx kind] eq "off"} {
+            if {[dict get $ctx Cf free] || [dict get $ctx hole free]} {
+                _wind_fail "Off-wind inclination profiles require fixed Cf and hole in this version; limits on view alone are not physical inclination limits when geometry varies"
+            }
+            set geometry [_wind_angles $ctx]
+            if {([dict get $ctx region]==0 && [dict get $geometry tin]==0) ||
+                ([dict get $ctx region]==1 && [dict get $geometry tout]==90)} {_wind_fail "The selected off-wind sector has fixed physical inclination"}
+        }
     }
     set marker [file tempfile directory]
     close $marker
@@ -660,21 +774,21 @@ proc winderror {component quantity args} {
         set script [file join $directory worker.xcm]
         set output [open $script w]
         puts $output {query no}
-        puts $output [list lmod wine $::_wind_library]
+        puts $output [list lmod redwine $::_wind_library]
         puts $output "@$snapshot"
         puts $output [list source $::_wind_source]
         puts $output [list _wind_error_worker $component $options $quantity \
             [dict get $settings delta] [dict get $settings toler] $directory]
         puts $output exit
         close $output
-        puts [format "    WINE %s confidence range (delta-stat %.3g)" $quantity [dict get $settings delta]]
+        puts [format "    RED-WINE %s confidence range (delta-stat %.3g)" $quantity [dict get $settings delta]]
         set failed [catch {exec env HOME=$directory xspec - < $script > [file join $directory worker.log] 2>@1} message]
         if {$failed || ![file exists [file join $directory result.tcl]]} {_wind_fail "Profile stopped. Diagnostics: $directory"}
         set input [open [file join $directory result.tcl] r]
         set result [string trim [read $input]]
         close $input
         if {[dict get $result status] ne "ok"} {
-            if {[lrange [dict get $result code] 0 1] eq {WINE BETTER_FIT}} {
+            if {[lrange [dict get $result code] 0 1] eq {RED-WINE BETTER_FIT}} {
                 _wind_fail "A better minimum exceeds toler. Inspect [dict get $result candidate] and refit the starting solution before reporting errors"
             }
             _wind_fail "[dict get $result message]. Diagnostics: $directory"
@@ -726,13 +840,13 @@ proc windsteppar {component args} {
         _wind_snapshot $directory
         set output [open $script w]
         puts $output {query no}
-        puts $output [list lmod wine $::_wind_library]
+        puts $output [list lmod redwine $::_wind_library]
         puts $output "@$snapshot"
         puts $output [list source $::_wind_source]
         puts $output [list _wind_scan_worker $component $options $axes $snapshot $directory]
         puts $output exit
         close $output
-        puts "    WINE angular scan: fitting in an isolated XSPEC session"
+        puts "    RED-WINE angular scan: fitting in an isolated XSPEC session"
         set total [expr {[llength [dict get [lindex $axes 0] values]] *
             [llength [dict get [lindex $axes 1] values]]}]
         set log [open [file join $directory worker.log] w]

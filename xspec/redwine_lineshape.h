@@ -3,7 +3,7 @@
 #include <cmath>
 #include <algorithm>
 
-namespace wine {
+namespace redwine {
 
 constexpr double kPi = 3.141592653589793;
 constexpr double kDeg2Rad = kPi / 180.0;
@@ -68,8 +68,9 @@ inline void lineshape(const double* E, int n, double E0, double beta, double inc
             continue;
         }
 
-        result[i] = sqrt_1_beta2 / (beta * E0) * w / fourpi;
+        // The energy-to-angle Jacobian is a density and stays positive for inflow.
+        result[i] = sqrt_1_beta2 / (std::abs(beta) * E0) * w / fourpi;
     }
 }
 
-}  // namespace wine
+}  // namespace redwine

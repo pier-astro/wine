@@ -1,20 +1,34 @@
-# WINE XSPEC Models
+# RED-WINE XSPEC Models
 
 XSPEC models for relativistic wind emission and absorption.
 
 ## Models
 
-### Emission geometry (development API)
+### Emission geometry
 
 | Model | Parameters before the supplied additive component |
 | --- | --- |
-| `windem` | `vout`, `Cf`, `hole`, `incl` |
-| `windemlos` | `vout`, `Cf`, `skew`, `incl` |
-| `windemoff` | `vout`, `Cf`, `hole`, `view`, `region` |
+| `wem` | `vout`, `tin`, `tout`, `incl` |
+| `wemlos` | `vout`, `tin`, `tout`, `uincl` |
+| `wemoff` | `vout`, `tin`, `tout`, `uview`, `region` |
+| `wem_Cf` | `vout`, `Cf`, `hole`, `incl` |
+| `wemlos_Cf` | `vout`, `Cf`, `skew`, `incl` |
+| `wemoff_Cf` | `vout`, `Cf`, `hole`, `view`, `region` |
 
 `vout` is in units of c; `incl` is in degrees. `Cf`, `hole`, `skew`, and
 `view` lie in [0, 1]. `region` is a frozen switch, 0 for the polar sector and
 1 for the equatorial sector. Fit the sectors separately.
+
+The direct-angle models use degrees. `wemlos` sets
+`incl = tin + uincl*(tout-tin)`. For `wemoff`, `uview = 0` is the edge
+of the wind. Inclination is `(1-uview)*tin` in the polar sector and
+`tout + uview*(90 deg-tout)` in the equatorial sector.
+For `tin >= tout` these models return zero emission and issue a warning
+on the first such evaluation. Exclude inverted points from physical intervals.
+
+All velocities are in units of c. The initial fitting range is [0, 0.99].
+To allow inflow, extend the soft lower bound towards the hard limit of -0.99.
+Negative velocities redshift features in the pure shift models.
 
 **This is a breaking development change.** Existing XCM sessions must be
 converted before loading: the parameter counts can be unchanged while the
@@ -59,9 +73,9 @@ region=1: incl = tout + view*(90 deg-tout)
 upper. Endpoints can graze a boundary. If a sector collapses, its view
 coordinate does not identify an independently measurable inclination.
 
-The three `windline` counterparts use the same four/five geometry parameters,
+The six `wline` counterparts use the same four/five geometry parameters,
 followed by `LineE` in keV and XSPEC's additive `norm`. Each computes one line;
-the `windem` family convolves a supplied additive spectrum with the same
+the `wem` family convolves a supplied additive spectrum with the same
 physical profile, using conservative rebinning and a linear zero-padded FFT.
 
 XSPEC's hard ranges constrain independent fit coordinates. For finite
@@ -77,24 +91,20 @@ consolidated `windgeom` report and two-opening-angle `windsteppar` scan are
 available, with optional generic FITS export; see the
 [procedure guide](../procedures/README.md). `winderror` provides derived
 opening-angle profiles and supported inclination errors; `windgeom` includes
-local covariance uncertainties. Free-geometry off-wind inclination profiles
-remain unsupported. Older `wineincl*` procedures
-were written for the retired angular coordinates and must not be used as
-conversion tools for this API. Native XSPEC `error` applies directly to `Cf`
-and to generic/LoS `incl`; clear loaded chains when requesting a likelihood
-profile rather than a posterior interval.
+local covariance uncertainties. See the procedure guide for supported
+inclination constraints in each coordinate family.
 
-### wind - Absorption Velocity Shift
+### wshift - Absorption Velocity Shift
 Relativistic velocity shift for multiplicative transmission spectra.
 
 **Parameters:**
-1. `vout` (c): Wind velocity [0-0.99]
+1. `vout` (c): Signed wind velocity
 
 **Physics:** Positive `vout` denotes an approaching outflow and blueshifts
 features: E_shifted = E × sqrt((1+β)/(1-β)).
 
 **Scope:** Apply only to multiplicative components such as `mtable`. Additive
-spectra require `awind` or `azwind`.
+spectra require `awshift` or `azwshift`.
 
 **Complexity:** $O(n)$
 
@@ -102,7 +112,7 @@ spectra require `awind` or `azwind`.
 Velocity shift including cosmological redshift for multiplicative spectra.
 
 **Parameters:**
-1. `vout` (c): Wind velocity [0-0.99]
+1. `vout` (c): Signed wind velocity
 2. `z`: Redshift [0-10]
 
 **Physics:** Combined factor: sqrt((1+β)/(1-β)) / (1+z)
@@ -110,8 +120,8 @@ Velocity shift including cosmological redshift for multiplicative spectra.
 **Complexity:** $O(n)$
 
 ### awind / azwind - Additive Velocity Shifts
-Flux-conserving relativistic shifts for additive spectra. `awind` takes
-`vout` in units of `v/c`; `azwind` also takes `z` and includes XSPEC's
+Flux-conserving relativistic shifts for additive spectra. `awshift` takes
+`vout` in units of `v/c`; `azwshift` also takes `z` and includes XSPEC's
 cosmological time-dilation factor. They match the numerical roles of
 `vashift` and `zashift`, but use the exact relativistic velocity factor.
 
@@ -127,17 +137,17 @@ cd xspec
 
 Or manually:
 ```bash
-initpackage wine lmodel.dat .
+initpackage redwine lmodel.dat .
 hmake
 ```
 
 ## Usage in XSPEC
 
 ```tcl
-lmod wine /path/to/wine/xspec
+lmod redwine /path/to/redwine/xspec
 
 # Velocity, hemispheric covering fraction, LoS skew, inclination in degrees.
-model windemlos*atable{emission.fits}
+model wemlos_Cf*atable{emission.fits}
 0.3
 0.4
 0.5
@@ -145,7 +155,7 @@ model windemlos*atable{emission.fits}
 /*
 
 # Generic shell: same Cf, independent inclination, unused-sky split=0.5.
-model windem*atable{emission.fits}
+model wem_Cf*atable{emission.fits}
 0.3
 0.4
 0.5
@@ -153,7 +163,7 @@ model windem*atable{emission.fits}
 /*
 
 # Wind-shift only the multiplicative transmission.
-model (wind*mtable{absorption.fits})*powerlaw
+model (wshift*mtable{absorption.fits})*powerlaw
 ```
 
 Supply the remaining table parameters appropriate to your spectra. The
@@ -161,7 +171,7 @@ geometry itself does not add a cosmological-redshift parameter.
 
 ### Energy coverage for shifts and emission broadening
 
-The convolution models (`wind`, `zwind`, `awind`, `azwind`, and the `windem`
+The convolution models (`wshift`, `zwshift`, `awshift`, `azwshift`, and the `wem_Cf`
 family) receive a spectrum already evaluated by XSPEC. They remap those values;
 they cannot request the underlying table or continuum at additional energies.
 The **model calculation grid** must therefore cover the input energies that
@@ -178,11 +188,11 @@ requires input coverage `[E_low/g, E_high/g]`. If broadening or fitted parameter
 ranges allow `g_min <= g <= g_max`, cover at least
 `[E_low/g_max, E_high/g_min]` as well as the output band itself.
 
-- `wind` and `awind` use `g = B = sqrt((1+beta)/(1-beta))`: positive outflow
+- `wshift` and `awshift` use `g = B = sqrt((1+beta)/(1-beta))`: positive outflow
   velocity requires a low-energy extension.
-- `zwind` and `azwind` use `g = B/(1+z)`. Extend the low or high boundary as
+- `zwshift` and `azwshift` use `g = B/(1+z)`. Extend the low or high boundary as
   needed over the full allowed velocity/redshift range.
-- The `windem` family broadens with `g = sqrt(1-beta^2)/(1-beta*cos(alpha))`,
+- The `wem_Cf` family broadens with `g = sqrt(1-beta^2)/(1-beta*cos(alpha))`,
   where `alpha` is the angle between the local velocity and the sightline.
   `1/B <= g <= B` is a conservative range; the selected geometry can narrow
   it. These models have no redshift parameter; apply any required cosmological
@@ -210,7 +220,7 @@ Check the calculation by extending the bounds further, with adequate sampling,
 and verifying that the model and fit statistic in the fitted band remain
 stable to the precision required by the analysis. Also check sampling
 convergence: wider coverage alone does not guarantee sufficient resolution.
-The one-time WINE notices remind users of this requirement; they do not test
+The one-time RED-WINE notices remind users of this requirement; they do not test
 whether the current grid is adequate.
 
 For a model-only plot, calculate on the wider grid and restrict the displayed
@@ -219,13 +229,13 @@ with 1--10 keV and remove its exterior coverage. `energies reset` returns to
 the native response grids and removes the extensions.
 
 The shifts follow the same supplied-array approach as XSPEC's `vashift` and
-`vmshift`; WINE uses its documented relativistic outflow convention.
-`wind` and `zwind` interpolate multiplicative factors directly on uneven grids,
-whereas `awind` and `azwind` conservatively rebin additive flux.
+`vmshift`; RED-WINE uses its documented relativistic outflow convention.
+`wshift` and `zwshift` interpolate multiplicative factors directly on uneven grids,
+whereas `awshift` and `azwshift` conservatively rebin additive flux.
 
 See the [XSPEC energies reference](https://heasarc.gsfc.nasa.gov/docs/software/xspec/manual/XSenergies.html).
 
 ## Requirements
 
 - XSPEC 12+
-- FFTW3 library (for windem FFT convolution)
+- FFTW3 library (for wem_Cf FFT convolution)

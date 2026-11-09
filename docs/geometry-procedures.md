@@ -1,9 +1,9 @@
 # Geometry procedures
 
-2026-10-27. `windgeom`, the two-opening-angle `windsteppar`, and structured FITS
+`windgeom`, the two-opening-angle `windsteppar`, and structured FITS
 export are implemented and tested. `winderror` adds derived opening-angle
 profiles and supported inclination cases; `windgeom` includes local covariance
-uncertainties. The `wineincl*` commands still target the retired coordinates.
+uncertainties. Both direct-angle and covering-fraction models use these commands.
 
 ## Three commands, one component selector
 
@@ -30,7 +30,7 @@ with a specific explanation rather than silently changing them.
   Retain the tested search, diagnostics, session preservation, and `toler`
   semantics. Defaults: `delta 2.706`, `toler 1.0` in absolute statistic
   units. Direct fitted `Cf` and `incl` remain accessible with native `error`;
-  no dedicated WINE commands for those parameters are needed. An interval on
+  no dedicated RED-WINE commands for those parameters are needed. An interval on
   `hole`, `skew`, or `view` cannot simply be relabelled as an angular interval
   while correlated parameters vary.
 - `windsteppar COMPONENT AXIS MIN MAX INTERVALS ...`: profile physical axes,
@@ -94,7 +94,7 @@ that the physical spectrum is forbidden.
 
 Reuse xspeclab's FITS writer through the proposed generic `result` input:
 `P1`, `P2`, `STAT`, `DELTASTAT`, plus `STATUS`; physical axes must not receive
-fabricated XSPEC parameter indices. WINE must not require xspeclab at runtime.
+fabricated XSPEC parameter indices. RED-WINE must not require xspeclab at runtime.
 The reader now exposes `status` and masks excluded/failed cells. Contours use
 whole-cell masking; interpolation/smoothing of masked grids is rejected.
 The export/read/plot path and failed/excluded accounting have been checked.
@@ -132,5 +132,5 @@ Fixed endpoint-skew charts and entirely fixed requested quantities are rejected.
 Derived searches approach 0/90 degrees to `1e-5` degrees; exact boundary spectra
 remain available in the two-angle scan. Returned `sides`, `angular_bounds`,
 `flag_format`, and (for transformations) `native_limits` distinguish boundary
-sentinels from measured limits and four WINE flags from nine native flags.
+sentinels from measured limits and four RED-WINE flags from nine native flags.
 Covariance reporting is local, not a substitute for the asymmetric profile.

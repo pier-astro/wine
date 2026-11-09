@@ -1,5 +1,8 @@
 # Geometry constraints: exploration before selecting an implementation
 
+These notes record experiments with earlier WINE model names. See the
+[current RED-WINE XSPEC interface](xspec.md) for model and procedure names.
+
 2026-10-27. The exploration below records the route to the agreed API. The
 geometry/model implementation and first checks are now recorded in
 [geometry-validation.md](geometry-validation.md). Earlier temporary experiments

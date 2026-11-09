@@ -11,7 +11,7 @@ mkdir -p results
 rm -f simulated.fak simulated.grp
 xspec - > results/simulation.log 2>&1 <<EOF
 query yes
-lmod wine ../xspec
+lmod redwine ../xspec
 @model.xcm
 energies 0.01 40 6000 log
 xset seed $seed

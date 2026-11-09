@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "wine"
+name = "redwine"
 version = "2.0.0a0"
 description = "Relativistic wind profiles and engine-independent X-ray spectral models."
 readme = "README.md"

@@ -7,7 +7,7 @@ foreach kind {generic los off} {
     set view [expr {$kind eq "off" ? "view" : "incl"}]
     set ::values [dict create 1 0.4 2 0.35 3 [expr {$kind eq "off" ? 0.4 : 35.0}]]
     foreach region {0 1} {
-        set ctx [dict create kind $kind region $region]
+        set ctx [dict create system cf kind $kind region $region]
         set coordinates {}
         foreach key [list Cf $shape $view] id {1 2 3} {
             dict set ctx $key [dict create id $id free 1]
@@ -34,14 +34,14 @@ foreach kind {generic los off} {
 }
 set propagated [_wind_covariance_error [dict create 1 2.0 2 -1.0] {{1 2} {4 1 9}}]
 if {abs($propagated-sqrt(21.0))>1e-12} {_wind_fail "Missing covariance cross term"}
-puts "WINE analytic geometry derivatives and full-covariance propagation passed"
+puts "RED-WINE analytic geometry derivatives and full-covariance propagation passed"
 
-source [file join [file dirname [info script]] wine_profile.tcl]
+source [file join [file dirname [info script]] redwine_profile.tcl]
 proc _wind_test_trial {ctx angle} {return [expr {$angle*$angle}]}
 set points {}
 set profile [dict create profile_bounds {0.00001 89.99999}]
-set lower [_wine_profile_side $profile 0.0 0.0 1.0 1.0 -1 points _wind_test_trial]
-set upper [_wine_profile_side $profile 90.0 0.0 1.0 1.0 1 points _wind_test_trial]
+set lower [_redwine_profile_side $profile 0.0 0.0 1.0 1.0 -1 points _wind_test_trial]
+set upper [_redwine_profile_side $profile 90.0 0.0 1.0 1.0 1 points _wind_test_trial]
 if {[lindex $lower 0] ne "boundary" || [lindex $lower 1]!=0 ||
     [lindex $upper 0] ne "boundary" || [lindex $upper 1]!=90} {_wind_fail "Incorrect pegged-center profile boundary"}
-puts "WINE shared profile callback and boundary-center checks passed"
+puts "RED-WINE shared profile callback and boundary-center checks passed"

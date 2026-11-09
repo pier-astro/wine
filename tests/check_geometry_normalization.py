@@ -10,7 +10,7 @@ This is also the nonrelativistic integrated line-profile limit.
 import numpy as np
 from scipy.integrate import quad
 
-from wine.kernels import w_phi_hollowcap
+from redwine.kernels import w_phi_hollowcap
 
 
 # Angles in degrees. The full sphere is a mathematical reference; the public

@@ -1,5 +1,8 @@
 # Geometry implementation: first validation pass
 
+These notes record experiments with earlier WINE model names. See the
+[current RED-WINE XSPEC interface](xspec.md) for model and procedure names.
+
 2026-10-27. Francesco and the author agreed on the parameterization. This
 pass implements and checks the geometry/model interface; the consolidated
 physical-angle procedures and scan export are the next stage. The project
