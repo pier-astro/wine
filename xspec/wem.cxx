@@ -124,17 +124,9 @@ static void convolveEmission(const RealArray& energy, double beta,
     redwine::lineshape(E_kernel.data(), n_os, 1.0, beta, geometry.incl,
                     geometry.tin, geometry.tout, kernel_raw.data());
     for (int i = 0; i < n_os; ++i) {
-        kernel_logE[i] = kernel_raw[i] * E_kernel[i];
-    }
-
-    const double fraction = geometry.Cf / 2.0;
-    double kernelSum = 0.0;
-    for (int i = 0; i < n_os; ++i) {
-        kernel_logE[i] *= dlog;
-        kernelSum += kernel_logE[i];
-    }
-    if (kernelSum > 0.0) {
-        for (double& value : kernel_logE) value *= fraction / kernelSum;
+        // Integrate the line density over the log-energy bin. The density
+        // already contains the wind solid angle and Doppler weights.
+        kernel_logE[i] = kernel_raw[i] * E_kernel[i] * dlog;
     }
 
     const int n_fft = nextPowerOfTwo(3 * n_os - 2);

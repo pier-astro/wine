@@ -85,6 +85,16 @@ extern "C" void wline(const RealArray& energy, const RealArray& params,
     lineEmission(energy, beta, geometry, params[4], flux, fluxErr);
 }
 
+extern "C" void zwline(const RealArray& energy, const RealArray& params,
+                          int spectrum, RealArray& flux, RealArray& fluxErr,
+                          const string& init) {
+    const double redshiftFactor = 1.0 + params[5];
+    const RealArray sourceEnergy(energy * redshiftFactor);
+    wline(sourceEnergy, params, spectrum, flux, fluxErr, init);
+    // Match the additive normalization convention of azwshift.
+    flux /= redshiftFactor;
+}
+
 extern "C" void wlinelos(const RealArray& energy, const RealArray& params,
                          int spectrum, RealArray& flux, RealArray& fluxErr,
                          const string& init) {

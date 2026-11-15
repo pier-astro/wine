@@ -107,3 +107,39 @@ For emission, `norm` is a simple multiplicative factor. RED-WINE does not infer 
 ## Current limits
 
 RED-WINE 2.0 currently evaluates individual slabs or shells. It does not calculate ionisation balance, attenuation of one shell by another, or a self-consistent multi-shell radiation field. The approximate Compton-thin focus in the README is a modelling scope, not a hard-coded column-density cut. The supplied grid's energy coverage and resolution must support the requested Doppler shifts and observer band.
+
+## Experimental velocity distributions
+
+`redwine.experimental.kernels` evaluates radial-velocity distributions for
+uniform intrinsic emissivity per unit solid angle. For example:
+
+```python
+import numpy as np
+from redwine.experimental.kernels import Wind, line
+
+edges = np.linspace(5, 10, 5001)  # keV
+wind = Wind("gaussian", center=0.25, spread=0.03,
+            inner=20, outer=50, inclination=45)
+photon_density = line(edges, 7.0, wind) / np.diff(edges)
+```
+
+`Wind` uses degrees for angles and units of c for velocities. For
+`"uniform"`, `spread` is the full interval width and `center` is a speed
+magnitude. Set `inflow=True` to reverse it. For `"gaussian"`, `spread` is
+the parent standard deviation and `center` is signed. The Gaussian is
+truncated at ±3 parent sigmas and at the physical limits −1 < β < 1.
+Its PDF is normalized over the retained interval. Set `bicone=True` to include the
+antipodal cone.
+
+`line` returns bin-integrated photons per unit intrinsic all-sky line flux.
+`convolve(edges, flux, wind)` redistributes bin-integrated photons assuming
+constant input photon density within each bin. These kernels retain the
+geometric covering fraction and the moving-emitter Doppler weight δ³ for
+integrated photons. The original `redwine.kernels.lineshape` uses δ² for
+integrated photons. The uniform kernel integrates constant azimuth panels
+analytically. Both kernels use one-dimensional velocity quadrature on the
+remaining panels and share their implementation with the XSPEC windkin models.
+
+The three `Slider Emission Profiles` notebooks in `example/` run with
+`matplotlib`, `ipympl`, `ipywidgets` and `astropy` in the notebook
+environment. Run all cells to initialize the sliders.

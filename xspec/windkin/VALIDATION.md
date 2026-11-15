@@ -1,0 +1,16 @@
+# Validation
+
+The ChatGPT attachment `windkin_prototype.zip` was unavailable from the local filesystem. This backend was rebuilt using the current RED-WINE checkout and the previous session's written specifications. The ten reported prototype tests were therefore not replayed. The checks here were written and run independently.
+
+- **Shared code.** RED-WINE's compiled `wline` and `wem` call `redwine::lineshape` in `xspec/redwine_lineshape.h`. Its flat-in-energy Jacobian factor at constant azimuth corresponds to a δ² integrated photon kernel. `windkin` reuses the Python semi-analytic B prototype's azimuth, velocity roots and uniform integral, with an extra energy factor for the adopted moving-emitter δ³ convention. The existing RED-WINE models and source files were not edited.
+- **Physics.** Single cone, inflow and bicone line profiles agreed with independent direct 3D scrambled Sobol quadrature to relative L1 ≤ 1.9×10⁻⁴ in the six representative comparisons. The largest absolute error for unit-flux convolution in the two direct 3D checks was 1.3×10⁻⁷ photons cm⁻² s⁻¹ per bin. Exact finite-grid spherical integrals and the mono-speed γ limit also passed, including β = 0.999999. Checks covered truncated and uniform PDF normalization, nearly mono-speed limits, geometry and direction symmetries, a narrow input line, irregular bins, geometric-grid FFT, and edge losses. Tightening the tabulation tolerance by 100× was checked on four spherical distributions.
+- **Runtime.** Cold additive evaluations for 1,100 bins took about 1–33 ms in the plotted cases on the local Apple Silicon host. Dense continuum redistribution on the native 60,000-bin Resolve grid took 28 s for B and 54 s for C in the tested geometry. Those timings were measured in the Python kernel with the actual XSPEC grid and continuum as inputs. The 20,000-bin logarithmic XSPEC grid took about 0.03 s per continuum model including response folding. Doubling to 40,000 bins changed the folded power-law spectrum by 2.1×10⁻⁸ in relative L1 for both kernels, at fixed energy coverage and default single-cone parameters.
+- **XSPEC.** Tested with XSPEC 12.15.1 / PyXspec 2.1.5. All four components evaluated alongside the existing compiled RED-WINE package, including real model evaluation on the PDS 456 2026 Resolve response. RED-WINE's own Python test suite also passed. The test exercise used model evaluation and folding, with no new fit or inference on PDS 456. Native Tcl loading of `windkin` was tested in XSPEC 12.15.1 with embedded Python 3.11. All five native components were evaluated, including `zwgline` with the real PDS 456 Resolve data. Other HEASoft releases and Python builds were not tested.
+
+Run `check.py` as described in the README to regenerate the B/C comparison figure and check a different response or environment. The numerical convolution assumes constant intrinsic photon density within each input energy bin. For a fit, test the chosen calculation grid and its energy range against the intrinsic spectrum and response.
+
+The signed Gaussian was additionally checked against direct 3D quadrature
+for a single cone with `vmean=0.02` and `sigma=0.08`. The line and convolution
+checks include both directions. The test also verifies continuity through
+zero, bicone reversal symmetry, and the positive and negative mono-speed
+limits.

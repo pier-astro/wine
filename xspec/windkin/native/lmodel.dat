@@ -1,0 +1,101 @@
+wuline 7 0.0 1.e20 C_wuline add 0
+vmean c 0.25 0 0 0.99 0.99 0.001
+width c 0.10 0 0 1 1 0.001
+tin deg 20 0 0 90 180 0.01
+tout deg 50 0 0 90 180 0.01
+incl deg 45 0 0 90 180 0.01
+$bicone 0
+LineE keV 6.7 1e-6 0.01 100 1e6 0.001
+
+wuconv 6 0.0 1.e20 C_wuconv con 0
+vmean c 0.25 0 0 0.99 0.99 0.001
+width c 0.10 0 0 1 1 0.001
+tin deg 20 0 0 90 180 0.01
+tout deg 50 0 0 90 180 0.01
+incl deg 45 0 0 90 180 0.01
+$bicone 0
+
+wgline 7 0.0 1.e20 C_wgline add 0
+vmean c 0.25 0 0 0.99 0.99 0.001
+sigma c 0.03 0 0 1 10 0.001
+tin deg 20 0 0 90 180 0.01
+tout deg 50 0 0 90 180 0.01
+incl deg 45 0 0 90 180 0.01
+$bicone 0
+LineE keV 6.7 1e-6 0.01 100 1e6 0.001
+
+wgconv 6 0.0 1.e20 C_wgconv con 0
+vmean c 0.25 0 0 0.99 0.99 0.001
+sigma c 0.03 0 0 1 10 0.001
+tin deg 20 0 0 90 180 0.01
+tout deg 50 0 0 90 180 0.01
+incl deg 45 0 0 90 180 0.01
+$bicone 0
+
+zwgline 8 0.0 1.e20 C_zwgline add 0
+vmean c 0.25 0 0 0.99 0.99 0.001
+sigma c 0.03 0 0 1 10 0.001
+tin deg 20 0 0 90 180 0.01
+tout deg 50 0 0 90 180 0.01
+incl deg 45 0 0 90 180 0.01
+$bicone 0
+LineE keV 6.7 1e-6 0.01 100 1e6 0.001
+z "" 0 0 0 10 10 0.001
+
+wglinelos_Cf 7 0.0 1.e20 C_wglinelosCf add 0
+vmean c 0.25 0 0 0.99 0.99 0.001
+sigma c 0.03 0 0 1 10 0.001
+Cf "" 0.3 0 0 1 1 0.01
+skew "" 0.5 0 0 1 1 0.01
+incl deg 45 0 0 90 90 0.01
+$bicone 0
+LineE keV 6.7 1e-6 0.01 100 1e6 0.001
+
+zwglinelos_Cf 8 0.0 1.e20 C_zwglinelosCf add 0
+vmean c 0.25 0 0 0.99 0.99 0.001
+sigma c 0.03 0 0 1 10 0.001
+Cf "" 0.3 0 0 1 1 0.01
+skew "" 0.5 0 0 1 1 0.01
+incl deg 45 0 0 90 90 0.01
+$bicone 0
+LineE keV 6.7 1e-6 0.01 100 1e6 0.001
+z "" 0 0 0 10 10 0.001
+
+wgconvlos_Cf 6 0.0 1.e20 C_wgconvlosCf con 0
+vmean c 0.25 0 0 0.99 0.99 0.001
+sigma c 0.03 0 0 1 10 0.001
+Cf "" 0.3 0 0 1 1 0.01
+skew "" 0.5 0 0 1 1 0.01
+incl deg 45 0 0 90 90 0.01
+$bicone 0
+
+
+wsect 7 0.0 1.e20 C_wsect con 0
+vout c 0.25 -0.99 -0.99 0.99 0.99 0.001
+tin deg 20 0 0 90 180 0.01
+tout deg 50 0 0 90 180 0.01
+incl deg 45 0 0 90 180 0.01
+phi deg 0 0 0 360 360 0.1
+dphi deg 90 0 0 360 360 0.1
+$bicone 0
+
+wsectline 8 0.0 1.e20 C_wsectline add 0
+vout c 0.25 -0.99 -0.99 0.99 0.99 0.001
+tin deg 20 0 0 90 180 0.01
+tout deg 50 0 0 90 180 0.01
+incl deg 45 0 0 90 180 0.01
+phi deg 0 0 0 360 360 0.1
+dphi deg 90 0 0 360 360 0.1
+$bicone 0
+LineE keV 6.7 1e-6 0.01 100 1e6 0.001
+
+zwsectline 9 0.0 1.e20 C_zwsectline add 0
+vout c 0.25 -0.99 -0.99 0.99 0.99 0.001
+tin deg 20 0 0 90 180 0.01
+tout deg 50 0 0 90 180 0.01
+incl deg 45 0 0 90 180 0.01
+phi deg 0 0 0 360 360 0.1
+dphi deg 90 0 0 360 360 0.1
+$bicone 0
+LineE keV 6.7 1e-6 0.01 100 1e6 0.001
+z "" 0 0 0 10 10 0.001

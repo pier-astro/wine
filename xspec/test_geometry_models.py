@@ -103,6 +103,15 @@ def main():
         flux = evaluate(family + "los_Cf" + suffix, [0.0, 0.3, 0.5, 45.0] + extra)
         np.testing.assert_allclose(flux.sum(), 0.15, rtol=1e-7)
 
+    # An aligned moving hemisphere integrates delta^2 over its solid angle.
+    # At beta=0.5 the two hemispheres have fluxes 0.75 and 0.25.
+    for beta, expected in ((0.5, 0.75), (-0.5, 0.25)):
+        geometry = [beta, 0.0, 90.0, 0.0]
+        for expression, extra in (("wem*gaussian", [6.7, 0.025, 1.0]),
+                                  ("wline", [6.7, 1.0])):
+            flux = evaluate(expression, geometry + extra)
+            np.testing.assert_allclose(flux.sum(), expected, rtol=3e-3)
+
     # Reusing a model must not leave an earlier nonzero spectrum at Cf=0.
     for expression, extra in (("wemlos_Cf*powerlaw", [2.0, 1.0]),
                               ("wlinelos_Cf", [6.7, 1.0])):

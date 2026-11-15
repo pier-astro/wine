@@ -239,3 +239,6 @@ See the [XSPEC energies reference](https://heasarc.gsfc.nasa.gov/docs/software/x
 
 - XSPEC 12+
 - FFTW3 library (for wem_Cf FFT convolution)
+
+`zwline` accepts the same parameters as `wline` followed by cosmological
+redshift `z` before the XSPEC norm. LineE stays in the source frame.
