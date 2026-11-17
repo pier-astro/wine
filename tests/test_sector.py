@@ -112,3 +112,14 @@ def test_convolution_against_direct_bin_overlap(log_grid):
     actual = convolve(edges, flux, sector)
     assert np.sum(abs(actual-expected)) < 2e-4*sum(expected)
     assert_allclose(actual.sum(), expected.sum(), rtol=1e-6)
+
+
+def test_resampled_sector_convolution_on_dense_linear_grid():
+    edges = np.linspace(2., 12., 2049)
+    centers = (edges[:-1] + edges[1:])/2
+    flux = np.exp(-((centers - 6.7)/.02)**2) * np.diff(edges)
+    sector = Sector(.258, 0, 90, 45, 182, 180)
+    exact = convolve(edges, flux, sector)
+    fast = convolve(edges, flux, sector, resample=True)
+    assert np.sum(abs(fast - exact)) < 1e-4 * exact.sum()
+    assert_allclose(fast.sum(), exact.sum(), rtol=1e-7)

@@ -100,7 +100,7 @@ def _evaluate_sector(edges, params, flux, *, additive, redshift_factor=1.):
         if additive:
             values = line(np.asarray(edges)*redshift_factor, params[7], sector)/redshift_factor
         else:
-            values = convolve(edges, flux, sector)
+            values = convolve(edges, flux, sector, resample=True)
     except ValueError as exc:
         warnings.warn(f"windkin: {exc}", RuntimeWarning, stacklevel=3)
         flux[:] = [0.] * (len(edges)-1)

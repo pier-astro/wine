@@ -285,7 +285,7 @@ def validate_xspec(redwine, spectrum, dense):
     model = Model("wsect*gaussian")
     model.setPars(*sector_params, 6.7, .0001, 1.)
     edges = np.asarray(model.energies(group))
-    np.testing.assert_allclose(model.values(group), convolve(edges, input_flux, sector),
+    np.testing.assert_allclose(model.values(group), convolve(edges, input_flux, sector, resample=True),
                                rtol=3e-7, atol=5e-10)
     print("XSPEC wsect/wsectline/zwsectline agree with the Python sector kernel.")
 

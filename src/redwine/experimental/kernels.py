@@ -308,8 +308,13 @@ def _partial_cdf(y, a, b, moments):
     return np.clip(lower[..., 0] + partial, 0., moments(hi)[0])
 
 
-def convolve(edges, flux, wind, *, tolerance=1e-7):
-    """Apply a Wind or Sector to bin-integrated photons with constant dN/dE per bin."""
+def convolve(edges, flux, wind, *, tolerance=1e-7, resample=False):
+    """Apply the wind kernel to integrated photons, assuming constant dN/dE per bin.
+
+    With resample=True, use a fourfold-oversampled log-energy grid for
+    dense non-geometric grids. Conservative rebinning preserves photon
+    integrals on the common domain, but approximates within-bin structure.
+    """
     edges = energy_edges(edges)
     flux = np.asarray(flux, dtype=float)
     if flux.shape != (len(edges)-1,) or not np.isfinite(flux).all():
@@ -322,14 +327,26 @@ def convolve(edges, flux, wind, *, tolerance=1e-7):
         return result
     with np.errstate(divide="ignore"):
         log_edges = np.log(edges)
+    n = len(flux)
+    geometric = edges[0] > 0 and np.allclose(
+        np.diff(log_edges), log_edges[1] - log_edges[0], rtol=1e-10, atol=1e-14
+    )
+    # Small grids are cheap to integrate directly. Logarithmic rebinning
+    # requires a strictly positive lower edge.
+    if resample and not geometric and n >= 1024 and edges[0] > 0:
+        uniform_edges = np.geomspace(edges[0], edges[-1], 4*n + 1)
+        input_cumulative = np.r_[0., np.cumsum(flux)]
+        uniform_flux = np.diff(np.interp(uniform_edges, edges, input_cumulative))
+        broadened = convolve(uniform_edges, uniform_flux, wind, tolerance=tolerance)
+        output_cumulative = np.r_[0., np.cumsum(broadened)]
+        return np.diff(np.interp(edges, uniform_edges, output_cumulative))
+
     moments = _moments(wind, max(-360., log_edges[0] - log_edges[source[-1]+1]),
                        min(360., log_edges[-1] - log_edges[source[0]]), tolerance)
     if moments is None:
         return result
 
-    n = len(flux)
-    if edges[0] > 0 and np.allclose(np.diff(log_edges), log_edges[1] - log_edges[0],
-                                    rtol=1e-10, atol=1e-14):
+    if geometric:
         # A geometric grid gives a translation-invariant bin-to-bin operator.
         log_step = (log_edges[-1] - log_edges[0])/n
         offsets = np.arange(-n+1, n+1)*log_step

@@ -168,11 +168,13 @@ An antipodal pair doubles that fraction. At finite velocity the flux is
 the integral of δ³ over the emitting solid angle divided by 4π.
 A zero-width sector or an equal pair of polar bounds emits zero flux.
 
-The kernel has no intrinsic line width. Energy grid truncation and
-numerical resolution of very narrow bins or sectors limit the result.
-Dense irregular-grid convolutions have the same bin-overlap cost as
-the other windkin models. RED-WINE's axisymmetric geometry procedures
-do not report sector solid angles or sector parameter uncertainties.
+The kernel has no intrinsic line width. In XSPEC, `wsect` conservatively
+rebins dense non-logarithmic grids to an internal logarithmic grid with four
+times as many bins, convolves by FFT, and rebins back. It retains the native
+energy limits, so input outside those limits still requires explicit energy
+extension. It uses direct bin overlaps for small grids and grids starting
+at zero. RED-WINE's axisymmetric geometry procedures do not report sector
+solid angles or sector parameter uncertainties.
 
 In Python use `redwine.experimental.kernels.Sector` with the same seven
 parameters, then pass it to `line(edges, rest_energy, sector)` or
