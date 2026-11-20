@@ -84,12 +84,12 @@ def test_profile_against_direct_angular_integration(beta, tin, tout, incl, phi, 
     angles = angular_points(sector, (nodes[:, None]+1)/2, (nodes+1)/2)
     shifts = doppler(sector, *angles)
     area = (np.cos(np.deg2rad(tin))-np.cos(np.deg2rad(tout)))*dphi/720
-    expected = sum(weights @ shift**3 @ weights for shift in shifts)*area/4
+    expected = sum(weights @ shift**2 @ weights for shift in shifts)*area/4
     assert_allclose(actual.sum(), expected, rtol=2e-6)
     # Integrate the energy-bin indicator in the original angular coordinates.
     u, v = qmc.Sobol(2, scramble=True, seed=37).random_base2(19).T
     shifts = doppler(sector, *angular_points(sector, u, v))
-    binned = sum(np.histogram(shift, edges, weights=shift**3)[0] for shift in shifts)
+    binned = sum(np.histogram(shift, edges, weights=shift**2)[0] for shift in shifts)
     binned *= area/len(u)
     assert np.sum(abs(actual-binned)) < 1.8e-3*expected
 
@@ -107,7 +107,7 @@ def test_convolution_against_direct_bin_overlap(log_grid):
     for shift in doppler(sector, *angular_points(sector, u, v)):
         for k, (lo, hi) in enumerate(zip(edges[:-1], edges[1:])):
             width = np.maximum(0., np.minimum(b, hi/shift)-np.maximum(a, lo/shift))
-            expected[k] += np.mean(width*shift**3)/(b-a)
+            expected[k] += np.mean(width*shift**2)/(b-a)
     expected *= sector.solid_angle_fraction/2
     actual = convolve(edges, flux, sector)
     assert np.sum(abs(actual-expected)) < 2e-4*sum(expected)

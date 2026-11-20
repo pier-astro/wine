@@ -13,7 +13,7 @@ from scipy.stats import qmc
 from windkin import Wind, convolve, line
 
 
-def angular_reference(wind, edges, rest_energy, power=3):
+def angular_reference(wind, edges, rest_energy, power=2):
     """Integrate beta, polar cosine and azimuth directly via scrambled Sobol."""
     speed, polar, azimuth = qmc.Sobol(3, scramble=True, seed=456).random_base2(21).T
     if wind.spread == 0:
@@ -38,13 +38,13 @@ def angular_reference(wind, edges, rest_energy, power=3):
 
 
 def analytic_sphere(edges, rest_energy, beta):
-    """Exact delta^3 photon weights for a mono-speed full sphere."""
+    """Exact RED-WINE delta^2 photon weights for a mono-speed full sphere."""
     if beta == 0:
         return ((edges[:-1] <= rest_energy) & (rest_energy < edges[1:])).astype(float)
     gamma_inverse = np.sqrt((1-beta)*(1+beta))
     max_shift = np.sqrt((1+beta)/(1-beta))
     x = np.clip(edges/rest_energy, 1/max_shift, max_shift)
-    return gamma_inverse*np.diff(x*x)/(4*beta)
+    return gamma_inverse*np.diff(x)/(2*beta)
 
 
 def validate(output):
@@ -57,7 +57,7 @@ def validate(output):
         exact = analytic_sphere(grid, rest, beta)
         actual = line(grid, rest, wind)
         np.testing.assert_allclose(actual, exact, atol=2e-8, rtol=5e-7)
-        np.testing.assert_allclose(actual.sum(), 1/np.sqrt(1-beta*beta), rtol=5e-7)
+        np.testing.assert_allclose(actual.sum(), 1., rtol=5e-7)
 
     for law, center, spread in (("uniform", .05, .10), ("gaussian", .02, .11),
                                 ("gaussian", .98, .12), ("gaussian", .5, 1.)):
@@ -66,8 +66,15 @@ def validate(output):
             max(-1., center-3*spread), min(1., center+3*spread))
         np.testing.assert_allclose(quad(wind.pdf, lo, hi)[0], 1., rtol=2e-12)
         grid = np.geomspace(.001, 500, 351)
+        # Finite-grid clipping changes branch near |beta|=1. Split there
+        # explicitly so QUADPACK resolves the small probability in those tails.
+        ratios = grid[[0, -1]] / rest
+        transitions = abs((ratios**2 - 1) / (ratios**2 + 1))
+        breaks = np.unique(np.r_[transitions, -transitions, 0.])
+        breaks = breaks[(breaks > lo) & (breaks < hi)]
         expected = quad(lambda beta: wind.pdf(beta)*analytic_sphere(
-            grid[[0, -1]], rest, abs(beta))[0], lo, hi, epsabs=1e-10, limit=300)[0]
+            grid[[0, -1]], rest, abs(beta))[0], lo, hi, points=breaks,
+            epsabs=1e-10, limit=300)[0]
         actual = line(grid, rest, wind)
         fine = line(grid, rest, wind, tolerance=1e-9)
         np.testing.assert_allclose(actual.sum(), expected, rtol=2e-6)
@@ -209,7 +216,7 @@ def validate(output):
         fig.savefig(output, dpi=160)
 
 
-def validate_xspec(redwine, spectrum, dense):
+def validate_xspec(redwine, spectrum, dense, native=False):
     from xspec import AllData, AllModels, Model, Spectrum, Xset
 
     from redwine.experimental.kernels import Sector
@@ -219,7 +226,10 @@ def validate_xspec(redwine, spectrum, dense):
     Xset.chatter = 5
     if redwine:
         AllModels.lmod("redwine", str(redwine / "xspec"))
-    register()
+    if native:
+        AllModels.lmod("windkin", str(Path(__file__).resolve().parent / "build/native"))
+    else:
+        register()
     print("PyXspec/XSPEC", Xset.version)
     if spectrum:
         data = Spectrum(str(spectrum))
@@ -233,6 +243,10 @@ def validate_xspec(redwine, spectrum, dense):
         for existing in ("wline", "wem*powerlaw"):
             assert np.sum(Model(existing).values(group)) > 0
 
+    # Compare adapter evaluations within the kernel's absolute tabulation
+    # budget (1e-7 per unit intrinsic flux), including XSPEC parameter/grid
+    # round trips that can select different adaptive panels.
+    adapter_atol = 2e-8
     for law, name, conv in (("uniform", "wuline", "wuconv"),
                             ("gaussian", "wgline", "wgconv")):
         params = [.25, .10, 20., 50., 45., 1] if law == "uniform" else [
@@ -242,7 +256,7 @@ def validate_xspec(redwine, spectrum, dense):
         model.setPars(*params, 6.7, 2.)
         edges = np.array(model.energies(group))
         expected = 2*line(edges, 6.7, wind)
-        np.testing.assert_allclose(model.values(group), expected, rtol=2e-7, atol=5e-10)
+        np.testing.assert_allclose(model.values(group), expected, rtol=2e-7, atol=adapter_atol)
         if spectrum:
             assert np.sum(model.folded(group)) > 0
 
@@ -257,7 +271,7 @@ def validate_xspec(redwine, spectrum, dense):
         actual = model.values(group)
         elapsed = perf_counter()-start
         expected = convolve(edges, input_flux, wind)
-        np.testing.assert_allclose(actual, expected, rtol=3e-7, atol=5e-10)
+        np.testing.assert_allclose(actual, expected, rtol=3e-7, atol=adapter_atol)
         print(f"XSPEC {name}/{conv}: {len(edges)-1} bins, {elapsed:.3f} s for "
               f"convolution setup and evaluation")
         if dense:
@@ -269,6 +283,17 @@ def validate_xspec(redwine, spectrum, dense):
             assert expected.sum() > 0 and np.isfinite(expected).all()
             print(f"Dense {conv}: {len(edges)-1} bins, {elapsed:.3f} s, "
                   f"output/input photon flux {expected.sum()/input_flux.sum():.6f}")
+    from redwine.geometry import Geometry
+    for cover, skew, incl in ((.7,.5,45.),(.2,.2,15.),(.9,.8,75.)):
+        geometry = Geometry.los(Cf=cover, skew=skew, incl=incl)
+        angular = Model("wuconv*gaussian")
+        angular.setPars(.28,.17,geometry.tin,geometry.tout,incl,0,6.7,.0001,1.)
+        expected = np.asarray(angular.values(group))
+        los = Model("wuconvlos_Cf*gaussian")
+        los.setPars(.28,.17,cover,skew,incl,0,6.7,.0001,1.)
+        np.testing.assert_allclose(los.values(group), expected, rtol=3e-7, atol=adapter_atol)
+    print("XSPEC wuconvlos_Cf agrees with physical-angle wuconv.")
+
     sector_params = (-.25, 20., 50., 45., 355., 80., 1)
     sector = Sector(*sector_params)
     for name, z in (("wsectline", 0.), ("zwsectline", .184)):
@@ -277,7 +302,7 @@ def validate_xspec(redwine, spectrum, dense):
         model.setPars(*sector_params, 6.7, *extra, 2.)
         edges = np.asarray(model.energies(group))
         expected = 2*line(edges*(1+z), 6.7, sector)/(1+z)
-        np.testing.assert_allclose(model.values(group), expected, rtol=2e-7, atol=5e-10)
+        np.testing.assert_allclose(model.values(group), expected, rtol=2e-7, atol=adapter_atol)
 
     source = Model("gaussian")
     source.setPars(6.7, .0001, 1.)
@@ -286,7 +311,7 @@ def validate_xspec(redwine, spectrum, dense):
     model.setPars(*sector_params, 6.7, .0001, 1.)
     edges = np.asarray(model.energies(group))
     np.testing.assert_allclose(model.values(group), convolve(edges, input_flux, sector, resample=True),
-                               rtol=3e-7, atol=5e-10)
+                               rtol=3e-7, atol=adapter_atol)
     print("XSPEC wsect/wsectline/zwsectline agree with the Python sector kernel.")
 
     if spectrum:
@@ -323,9 +348,10 @@ if __name__ == "__main__":
     parser.add_argument("--redwine", type=Path)
     parser.add_argument("--spectrum", type=Path)
     parser.add_argument("--dense", action="store_true")
+    parser.add_argument("--native", action="store_true", help="Check the compiled XSPEC package")
     args = parser.parse_args()
     if args.xspec:
-        validate_xspec(args.redwine, args.spectrum, args.dense)
+        validate_xspec(args.redwine, args.spectrum, args.dense, args.native)
     else:
         validate(args.plot)
     print("Validation passed.")

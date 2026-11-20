@@ -48,14 +48,15 @@ proc _wind_context {component options} {
     if {$prefix ne ""} {append prefix :}
     lassign [_wind_out compinfo ${prefix}$component [dict get $options group]] name first count
     set name [string tolower $name]
-    set coordinates [dict create         wem {generic angles tin tout incl} wline {generic angles tin tout incl}         wemlos {los angles tin tout uincl} wlinelos {los angles tin tout uincl}         wemoff {off angles tin tout uview} wlineoff {off angles tin tout uview}         wem_cf {generic cf Cf hole incl} wline_cf {generic cf Cf hole incl}         wemlos_cf {los cf Cf skew incl} wlinelos_cf {los cf Cf skew incl}         wemoff_cf {off cf Cf hole view} wlineoff_cf {off cf Cf hole view}]
+    set coordinates [dict create         wem {generic angles tin tout incl} wline {generic angles tin tout incl}         wemlos {los angles tin tout uincl} wlinelos {los angles tin tout uincl}         wemoff {off angles tin tout uview} wlineoff {off angles tin tout uview}         wem_cf {generic cf Cf hole incl} wline_cf {generic cf Cf hole incl}         wemlos_cf {los cf Cf skew incl} wlinelos_cf {los cf Cf skew incl}         wemoff_cf {off cf Cf hole view} wlineoff_cf {off cf Cf hole view} wuconv {generic angles tin tout incl} wuconvlos_cf {los cf Cf skew incl}]
     if {![dict exists $coordinates $name]} {
         _wind_fail "Component $component is not a RED-WINE emission component: $name"
     }
     lassign [dict get $coordinates $name] kind system firstKey secondKey view
     set keys [list $firstKey $secondKey $view]
     set ctx [dict create component $component options $options kind $kind system $system name $name keys $keys]
-    foreach key $keys offset {1 2 3} {
+    set offsets [expr {$name in {wuconv wuconvlos_cf} ? {2 3 4} : {1 2 3}}]
+    foreach key $keys offset $offsets {
         dict set ctx $key [_wind_parameter ${prefix}[expr {$first+$offset}] $key]
     }
     if {$kind eq "off"} {

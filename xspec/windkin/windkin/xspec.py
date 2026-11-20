@@ -63,6 +63,10 @@ def wuconv(edges, params, flux):
     _evaluate("uniform", False, edges, params, flux)
 
 
+def wuconvlos_Cf(edges, params, flux):
+    _evaluate("uniform", False, edges, params, flux, los=True)
+
+
 def wgline(edges, params, flux):
     _evaluate("gaussian", True, edges, params, flux)
 
@@ -134,6 +138,7 @@ def register():
         AllModels.addPyMod(convolution, params, "con")
     params = (_COMMON[0], _SPREAD["gaussian"], *_COMMON[1:])
     AllModels.addPyMod(zwgline, (*params, _LINE_ENERGY, _REDSHIFT), "add")
+    AllModels.addPyMod(wuconvlos_Cf, (_COMMON[0], _SPREAD["uniform"], *_LOS_GEOMETRY), "con")
     params = (_COMMON[0], _SPREAD["gaussian"], *_LOS_GEOMETRY)
     AllModels.addPyMod(wglinelos_Cf, (*params, _LINE_ENERGY), "add")
     AllModels.addPyMod(zwglinelos_Cf, (*params, _LINE_ENERGY, _REDSHIFT), "add")

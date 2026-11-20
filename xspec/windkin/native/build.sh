@@ -13,7 +13,7 @@ export WINDKIN_PY_CPPFLAGS="$("$python_config" --includes)"
 export WINDKIN_PY_LDFLAGS="$("$python_config" --embed --ldflags)"
 
 mkdir -p ../build/native
-cp windkin.cxx lmodel.dat ../build/native/
+cp windkin.cxx uniform.h lmodel.dat ../../redwine_geometry.h ../build/native/
 cd ../build/native
 rm -f lpack_windkin.cxx lpack_windkin.o windkinFunctionMap.cxx \
     windkinFunctionMap.h windkinFunctionMap.o windkin.o Makefile pkgIndex.tcl \

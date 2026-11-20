@@ -2,7 +2,7 @@
 
 Energies are in keV and fluxes are integrated per bin. The intrinsic velocity
 PDF has unit integral. The observed kernel retains the wind solid angle and
-the moving-emitter Doppler weight (delta cubed for integrated photons).
+the RED-WINE/Nature photon weight (delta squared for integrated photons).
 """
 
 from dataclasses import dataclass
@@ -182,9 +182,9 @@ def _moments(wind, lower, upper, tolerance):
                     jac[logarithmic] = beta[logarithmic]*log_span[:, None]
                     value = cap.density(beta, offset[idx, None])*wind.pdf(sign*beta)*jac
                     np.add.at(density, idx, (value @ _beta_weights)/2)
-        # RED-WINE's density per x contains the delta^2 photon weight.
-        # Multiply by x for delta^3, and again for dx/dlog(x).
-        return np.stack((density*shift**2, density*shift), axis=-1)
+        # The RED-WINE photon density already includes the delta^2 weight.
+        # dx/dlog(x)=x supplies the CDF Jacobian; the second moment is K/x.
+        return np.stack((density*shift, density), axis=-1)
 
     return _tabulate_moments(log_density, knots, lo, hi, wind.solid_angle_fraction, tolerance)
 
@@ -212,7 +212,7 @@ def _sector_moments(sector, lower, upper, tolerance):
         mu = offset/beta + (1-offset)*beta/(1+speed_factor)
         density = rings.arcs(mu)*speed_factor/(2*abs(beta))
         shift = np.exp(log_shift)
-        return np.stack((density*shift**2, density*shift), axis=-1)
+        return np.stack((density*shift, density), axis=-1)
 
     return _tabulate_moments(log_density, knots, lo, hi,
                              sector.solid_angle_fraction, tolerance)

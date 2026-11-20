@@ -134,7 +134,7 @@ antipodal cone.
 `line` returns bin-integrated photons per unit intrinsic all-sky line flux.
 `convolve(edges, flux, wind)` redistributes bin-integrated photons assuming
 constant input photon density within each bin. These kernels retain the
-geometric covering fraction and the moving-emitter Doppler weight δ³ for
+geometric covering fraction and the RED-WINE/Nature Doppler weight δ² for
 integrated photons. The original `redwine.kernels.lineshape` uses δ² for
 integrated photons. The uniform kernel integrates constant azimuth panels
 analytically. Both kernels use one-dimensional velocity quadrature on the

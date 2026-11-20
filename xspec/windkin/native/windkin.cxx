@@ -1,4 +1,6 @@
 #include <Python.h>
+#include "uniform.h"
+#include "redwine_geometry.h"
 #include <xsTypes.h>
 #include <XSFunctions/Utilities/FunctionUtility.h>
 #include <cstdlib>
@@ -132,9 +134,49 @@ extern "C" void zwgline(const RealArray& energy, const RealArray& params,
     evaluate("zwgline", true, energy, params, flux, fluxErr);
 }
 
+namespace {
+void evaluateUniform(const RealArray& energy, const RealArray& params,
+                     RealArray& flux, RealArray& fluxErr, bool los) {
+    try {
+        const std::vector<double> edges(std::begin(energy), std::end(energy));
+        const std::vector<double> input(std::begin(flux), std::end(flux));
+        std::array<double,6> parameters{{params[0],params[1],params[2],params[3],params[4],params[5]}};
+        if (los) {
+            if (!std::isfinite(params[2]) || !std::isfinite(params[3]) || !std::isfinite(params[4]))
+                throw std::invalid_argument("wuconvlos_Cf: geometry must be finite");
+            // XSPEC derivatives may probe beyond hard bounds. Continue at
+            // the nearest boundary, as in RED-WINE's LOS model adapter.
+            const double cover=windkin_uniform::clip(params[2],0.,1.);
+            const double skew=windkin_uniform::clip(params[3],0.,1.);
+            const double inclination=windkin_uniform::clip(params[4],0.,90.);
+            const double radians=std::acos(-1.)/180;
+            const auto geometry=redwine::losGeometry(cover,skew,inclination*radians);
+            parameters[4]=inclination;
+            parameters[2]=geometry.tin/radians;
+            parameters[3]=geometry.tout/radians;
+        }
+        const auto result=windkin_uniform::convolve(edges,input,parameters);
+        for (size_t i=0; i<result.size(); ++i) flux[i]=result[i];
+        fluxErr.resize(0);
+    } catch (const std::invalid_argument& error) {
+        // Match the Python adapter's zero-flux behavior outside physical bounds.
+        FunctionUtility::xsWrite(std::string("windkin: ")+error.what(),10);
+        flux=0.;
+        fluxErr.resize(0);
+    } catch (const std::exception& error) {
+        throw FunctionUtility::FunctionException(std::string("windkin: ")+error.what());
+    }
+}
+} // namespace
+
 extern "C" void wuconv(const RealArray& energy, const RealArray& params,
                         int, RealArray& flux, RealArray& fluxErr, const string&) {
-    evaluate("wuconv", false, energy, params, flux, fluxErr);
+    evaluateUniform(energy, params, flux, fluxErr, false);
+}
+
+extern "C" void wuconvlosCf(const RealArray& energy, const RealArray& params,
+                            int, RealArray& flux, RealArray& fluxErr, const string&) {
+    evaluateUniform(energy, params, flux, fluxErr, true);
 }
 
 extern "C" void wgconv(const RealArray& energy, const RealArray& params,
